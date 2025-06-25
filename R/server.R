@@ -1,4 +1,4 @@
-# server.R - Faculty Evaluation App (Simple Start)
+# server.R - Faculty Evaluation App (Corrected Version)
 
 server <- function(input, output, session) {
   
@@ -26,8 +26,7 @@ server <- function(input, output, session) {
     search_term <- tolower(trimws(input$faculty_search))
     if (nchar(search_term) < 2) return(NULL)
     
-    # Search in name field - adjust field name based on your faculty database
-    # Try common field names - prioritizing fac_name based on your structure
+    # Search in name field - prioritizing fac_name based on your structure
     name_field <- if ("fac_name" %in% names(faculty_data)) {
       "fac_name"
     } else if ("name" %in% names(faculty_data)) {
@@ -214,69 +213,190 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # ADD NEW FACULTY
+  # MODAL AND FACULTY ADDITION
   # ============================================================================
   
-  # Test if ANY button clicks work
-  observeEvent(input$faculty_not_found, {
-    cat("Faculty not found checkbox changed to:", input$faculty_not_found, "\n")
+  # Handle modal opening
+  observeEvent(input$show_add_faculty_modal, {
+    # Reset validation warnings when modal opens
+    session$sendCustomMessage("resetFacultyForm", list())
   })
   
-  # Handle adding new faculty
+  # Reset form when modal opens (triggered by JavaScript)
+  observeEvent(input$reset_faculty_form, {
+    updateTextInput(session, "fac_name", value = "")
+    updateTextInput(session, "fac_email", value = "")
+    updateSelectInput(session, "fac_clin", selected = "")
+    updateSelectInput(session, "fac_div", selected = "")
+    updateTextInput(session, "other_div", value = "")
+    updateSelectInput(session, "fac_fell", selected = "")
+    updateCheckboxGroupInput(session, "fac_med_ed", selected = character(0))
+  })
+  
+  # Updated faculty submission with modal handling
   observeEvent(input$add_new_faculty, {
-    req(input$new_faculty_name)
-    req(input$new_faculty_role)
-    req(input$new_faculty_dept)
+    cat("=== ADD NEW FACULTY BUTTON CLICKED ===\n")
+    cat("Button clicked at:", Sys.time(), "\n")
     
-    # Validate email if provided
-    if (!is.null(input$new_faculty_email) && input$new_faculty_email != "") {
+    # Check what inputs we received
+    cat("Input values:\n")
+    cat("fac_name:", if(is.null(input$fac_name)) "NULL" else paste0("'", input$fac_name, "'"), "\n")
+    cat("fac_email:", if(is.null(input$fac_email)) "NULL" else paste0("'", input$fac_email, "'"), "\n")
+    cat("fac_clin:", if(is.null(input$fac_clin)) "NULL" else paste0("'", input$fac_clin, "'"), "\n")
+    cat("fac_div:", if(is.null(input$fac_div)) "NULL" else paste0("'", input$fac_div, "'"), "\n")
+    cat("fac_fell:", if(is.null(input$fac_fell)) "NULL" else paste0("'", input$fac_fell, "'"), "\n")
+    cat("other_div:", if(is.null(input$other_div)) "NULL" else paste0("'", input$other_div, "'"), "\n")
+    cat("fac_med_ed:", if(is.null(input$fac_med_ed)) "NULL" else paste(input$fac_med_ed, collapse = ","), "\n")
+    
+    # Validation with detailed error messages
+    missing_fields <- character(0)
+    
+    # Check required fields
+    if (is.null(input$fac_name) || trimws(input$fac_name) == "") {
+      missing_fields <- c(missing_fields, "Full Name")
+    }
+    
+    if (is.null(input$fac_email) || trimws(input$fac_email) == "") {
+      missing_fields <- c(missing_fields, "Email Address")
+    } else {
+      # Validate email format
       email_pattern <- "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-      if (!grepl(email_pattern, input$new_faculty_email)) {
-        showNotification("Please enter a valid email address.", type = "error")
-        return()
+      if (!grepl(email_pattern, input$fac_email)) {
+        missing_fields <- c(missing_fields, "Valid Email Address")
       }
     }
     
+    if (is.null(input$fac_div) || input$fac_div == "") {
+      missing_fields <- c(missing_fields, "Division/Section")
+    }
+    
+    if (is.null(input$fac_fell) || input$fac_fell == "") {
+      missing_fields <- c(missing_fields, "Faculty or Fellow")
+    }
+    
+    # If there are missing fields, show the warning
+    if (length(missing_fields) > 0) {
+      cat("VALIDATION FAILED - Missing fields:", paste(missing_fields, collapse = ", "), "\n")
+      
+      # Create the missing fields list HTML
+      missing_list_html <- paste0(
+        "<ul style='margin: 0.5rem 0 0 1.5rem; list-style-type: disc;'>",
+        paste0("<li>", missing_fields, "</li>", collapse = ""),
+        "</ul>"
+      )
+      
+      # Show the warning div with JavaScript
+      session$sendCustomMessage("showValidationWarning", list(
+        show = TRUE,
+        fields = missing_list_html
+      ))
+      
+      # Also show a notification
+      showNotification(
+        paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")), 
+        type = "error",
+        duration = 5
+      )
+      return()
+    }
+    
+    # Hide the validation warning if validation passes
+    session$sendCustomMessage("showValidationWarning", list(show = FALSE))
+    
+    cat("All required fields validated successfully\n")
+    
+    # Check for preferred email domains (warning only, doesn't stop submission)
+    if (!grepl("@ssmhealth\\.com|@va\\.gov", input$fac_email, ignore.case = TRUE)) {
+      cat("WARNING: Non-preferred email domain\n")
+      showNotification("Note: Consider using @ssmhealth.com or @va.gov email if available.", 
+                       type = "warning", duration = 3)
+    }
+    
+    cat("Creating faculty data object...\n")
+    
     # Create new faculty record
     new_faculty_data <- list(
-      name = input$new_faculty_name,
-      role = input$new_faculty_role,
-      department = input$new_faculty_dept,
-      email = input$new_faculty_email %||% "",
-      status = "pending_review",
+      fac_name = trimws(input$fac_name),
+      fac_email = trimws(input$fac_email),
+      fac_clin = if(is.null(input$fac_clin) || input$fac_clin == "") "" else input$fac_clin,
+      fac_div = input$fac_div,
+      other_div = if (input$fac_div == "15") trimws(input$other_div) else "",
+      fac_fell = input$fac_fell,
+      fac_med_ed = if (length(input$fac_med_ed) > 0) paste(input$fac_med_ed, collapse = ",") else "",
       date_added = format(Sys.Date(), "%Y-%m-%d")
     )
     
     tryCatch({
+      cat("=== STARTING FACULTY SUBMISSION ===\n")
+      cat("Faculty data to submit:\n")
+      print(new_faculty_data)
+      
       # Submit to REDCap faculty database
-      submit_new_faculty_to_redcap(new_faculty_data, fac_token, url)
+      result <- submit_new_faculty_to_redcap(new_faculty_data, fac_token, url)
+      cat("Submission result:", result, "\n")
       
       showNotification(
-        paste("Faculty profile for", input$new_faculty_name, "has been submitted for review."), 
-        type = "default"
+        paste("✅ Welcome,", input$fac_name, "! Your profile has been added successfully."), 
+        type = "default",
+        duration = 5
       )
       
       # Create temporary faculty object for immediate use
       temp_faculty <- data.frame(
-        name = input$new_faculty_name,
-        department = input$new_faculty_dept,
-        role = input$new_faculty_role,
-        email = input$new_faculty_email %||% "",
-        status = "pending",
+        fac_name = input$fac_name,
+        fac_email = input$fac_email,
+        fac_clin = case_when(
+          input$fac_clin == "1" ~ "SSM",
+          input$fac_clin == "2" ~ "VA", 
+          input$fac_clin == "3" ~ "Other",
+          TRUE ~ input$fac_clin
+        ),
+        fac_div = if (input$fac_div == "15") input$other_div else {
+          case_when(
+            input$fac_div == "1" ~ "Addiction Medicine",
+            input$fac_div == "2" ~ "Allergy",
+            input$fac_div == "3" ~ "Cardiology",
+            input$fac_div == "4" ~ "Endocrinology",
+            input$fac_div == "5" ~ "Gastroenterology",
+            input$fac_div == "6" ~ "Geriatrics",
+            input$fac_div == "7" ~ "GIM - Hospitalist",
+            input$fac_div == "8" ~ "GIM - Primary Care",
+            input$fac_div == "9" ~ "Hematology / Oncology",
+            input$fac_div == "10" ~ "Infectious Disease",
+            input$fac_div == "11" ~ "Nephrology",
+            input$fac_div == "12" ~ "Palliative Care",
+            input$fac_div == "13" ~ "Pulmonary / Critical Care",
+            input$fac_div == "14" ~ "Rheumatology",
+            TRUE ~ "Other"
+          )
+        },
+        fac_fell = case_when(
+          input$fac_fell == "1" ~ "Faculty",
+          input$fac_fell == "2" ~ "Fellow",
+          TRUE ~ input$fac_fell
+        ),
+        status = "active",
         stringsAsFactors = FALSE
       )
       
       values$selected_faculty <- temp_faculty
       
-      # Reset form
-      updateTextInput(session, "new_faculty_name", value = "")
-      updateSelectInput(session, "new_faculty_role", selected = "")
-      updateTextInput(session, "new_faculty_dept", value = "")
-      updateTextInput(session, "new_faculty_email", value = "")
-      updateCheckboxInput(session, "faculty_not_found", value = FALSE)
+      # Close the modal and reset form
+      session$sendCustomMessage("closeFacultyModal", list())
+      
+      # Reset form inputs
+      updateTextInput(session, "fac_name", value = "")
+      updateTextInput(session, "fac_email", value = "")
+      updateSelectInput(session, "fac_clin", selected = "")
+      updateSelectInput(session, "fac_div", selected = "")
+      updateTextInput(session, "other_div", value = "")
+      updateSelectInput(session, "fac_fell", selected = "")
+      updateCheckboxGroupInput(session, "fac_med_ed", selected = character(0))
       
     }, error = function(e) {
-      showNotification(paste("Error submitting faculty profile:", e$message), type = "error")
+      cat("Error submitting faculty profile:", e$message, "\n")
+      showNotification(paste("❌ Error submitting faculty profile:", e$message), 
+                       type = "error", duration = 8)
     })
   })
   
@@ -291,6 +411,5 @@ server <- function(input, output, session) {
     
     # Clear inputs
     updateTextInput(session, "faculty_search", value = "")
-    updateCheckboxInput(session, "faculty_not_found", value = FALSE)
   })
 }
