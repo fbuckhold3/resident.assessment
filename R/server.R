@@ -217,6 +217,11 @@ server <- function(input, output, session) {
   # ADD NEW FACULTY
   # ============================================================================
   
+  # Test if ANY button clicks work
+  observeEvent(input$faculty_not_found, {
+    cat("Faculty not found checkbox changed to:", input$faculty_not_found, "\n")
+  })
+  
   # Handle adding new faculty
   observeEvent(input$add_new_faculty, {
     req(input$new_faculty_name)
