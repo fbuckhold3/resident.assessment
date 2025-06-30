@@ -1,4 +1,4 @@
-/* faculty-app.css - SSM Health Faculty Evaluation System */
+/* faculty-app.css - SSM Health Faculty Evaluation System (Updated with Resident Styling) */
 
 /* SSM Health Brand Colors & Typography */
 :root {
@@ -104,6 +104,35 @@ body {
   width: 4px;
 }
 
+/* Resident-specific search result styling */
+.resident-result {
+  border-color: rgba(0, 166, 81, 0.2);
+}
+
+.resident-result:hover {
+  border-color: var(--ssm-success-green);
+  box-shadow: 0 4px 16px rgba(0, 166, 81, 0.15);
+}
+
+.resident-result::before {
+  background: var(--ssm-success-green);
+}
+
+/* Rotator-specific styling */
+.rotator-result {
+  border-color: rgba(33, 150, 243, 0.3);
+  background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+}
+
+.rotator-result:hover {
+  border-color: var(--ssm-accent-blue);
+  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.2);
+}
+
+.rotator-result::before {
+  background: var(--ssm-accent-blue);
+}
+
 /* Faculty Card */
 .faculty-card {
   background: linear-gradient(135deg, var(--ssm-white) 0%, #f8f9fa 100%);
@@ -123,6 +152,25 @@ body {
   opacity: 0.4;
 }
 
+/* Resident Card */
+.resident-card {
+  background: linear-gradient(135deg, var(--ssm-white) 0%, #f0f8f0 100%);
+  border: 1px solid rgba(0, 166, 81, 0.15);
+  border-radius: 16px;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.resident-card::before {
+  content: '👨‍⚕️';
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 1.25rem;
+  opacity: 0.4;
+}
+
 .question-text {
   font-size: 1.125rem;
   font-weight: 600;
@@ -132,6 +180,16 @@ body {
 }
 
 .faculty-selected {
+  margin-top: 1rem;
+  font-weight: 600;
+  color: var(--ssm-success-green);
+  padding: 0.75rem 1.25rem;
+  background: rgba(0, 166, 81, 0.1);
+  border-radius: 12px;
+  border-left: 4px solid var(--ssm-success-green);
+}
+
+.resident-selected {
   margin-top: 1rem;
   font-weight: 600;
   color: var(--ssm-success-green);

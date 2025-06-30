@@ -1,4 +1,4 @@
-# ui.R - Faculty Evaluation App (Clean Version with External Files)
+# ui.R - Faculty Evaluation App (Updated with Resident Selection)
 
 ui <- page_fluid(
   theme = bs_theme(bootswatch = "flatly", version = 5),  # Bootstrap 5 for modal support
@@ -26,7 +26,7 @@ ui <- page_fluid(
       # Faculty Search/Login Step
       div(class = "ssm-card",
           div(class = "step-header",
-              h3("Faculty Login"),
+              h3("Step 1: Faculty Login"),
               p("Search for your name to begin evaluating residents", style = "margin: 0; opacity: 0.9;")
           ),
           div(style = "padding: 2rem 0;",
@@ -63,6 +63,56 @@ ui <- page_fluid(
                                `data-bs-target` = "#addFacultyModal")
               )
           )
+      ),
+      
+      # Resident Selection Step
+      conditionalPanel(
+        condition = "output.show_next_steps",
+        div(class = "ssm-card",
+            div(class = "step-header",
+                h3("Step 2: Select Resident"),
+                p("Choose the resident you want to evaluate", style = "margin: 0; opacity: 0.9;")
+            ),
+            div(style = "padding: 2rem 0;",
+                fluidRow(
+                  column(8,
+                         div(class = "mb-3",
+                             h5("Search for Resident Name", class = "question-text"),
+                             textInput("resident_search", 
+                                       "", 
+                                       placeholder = "Start typing resident name...")
+                         ),
+                         div(id = "resident_search_results",
+                             uiOutput("resident_search_results")
+                         )
+                  ),
+                  column(4,
+                         div(class = "resident-card",
+                             h5("Selected Resident", class = "question-text"),
+                             uiOutput("selected_resident_info")
+                         )
+                  )
+                )
+            )
+        )
+      ),
+      
+      # Evaluation Form Step (Placeholder)
+      conditionalPanel(
+        condition = "output.show_evaluation_step",
+        div(class = "ssm-card",
+            div(class = "step-header",
+                h3("Step 3: Faculty Evaluation"),
+                p("Evaluate the selected resident", style = "margin: 0; opacity: 0.9;")
+            ),
+            div(style = "padding: 2rem; text-align: center;",
+                h4("Evaluation Form Coming Next!", style = "color: var(--ssm-success-green);"),
+                p("Both faculty and resident have been selected successfully."),
+                p("The evaluation form will be built in the next iteration."),
+                br(),
+                actionButton("start_over", "Start Over", class = "btn btn-secondary")
+            )
+        )
       ),
       
       # Bootstrap 5 Modal for Adding Faculty
@@ -203,22 +253,6 @@ ui <- page_fluid(
                                  )
                         )
                )
-      ),
-      
-      # Placeholder for next steps
-      conditionalPanel(
-        condition = "output.show_next_steps",
-        div(class = "ssm-card",
-            div(class = "step-header",
-                h3("Next: Resident Selection"),
-                p("This will be built next", style = "margin: 0; opacity: 0.9;")
-            ),
-            div(style = "padding: 2rem; text-align: center;",
-                h4("Faculty Selected Successfully!", style = "color: var(--ssm-success-green);"),
-                p("Next we'll add resident selection and evaluation forms."),
-                actionButton("start_over", "Start Over", class = "btn btn-secondary")
-            )
-        )
       )
   )
 )

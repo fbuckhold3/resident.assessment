@@ -6,6 +6,221 @@
 }
 
 # ============================================================================
+# RESIDENT DATA PROCESSING FUNCTIONS
+# ============================================================================
+
+# Archive function - get list of archived residents
+archive <- function(data) {
+  archived_residents <- data %>%
+    filter(res_archive == "Yes") %>%
+    pull(name)
+  return(archived_residents)
+}
+
+# Remove archived residents from dataset
+remove_archived_residents <- function(data) {
+  # Get list of archived residents
+  archived_residents <- archive(data)
+  # Remove rows where name is in the list of archived residents
+  data <- data %>% filter(!name %in% archived_residents)
+  return(data)
+}
+
+# Calculate resident level based on graduation year and type - CORRECTED FOR PRELIMS WITH DEBUGGING
+calculate_resident_level <- function(coach_data) {
+  cat("Inside calculate_resident_level\n")
+  
+  if (!inherits(coach_data, "data.frame")) {
+    stop("Input to calculate_resident_level must be a data frame or tibble.")
+  }
+  
+  # Get today's date and current academic year
+  current_date <- Sys.Date()
+  current_calendar_year <- as.numeric(format(current_date, "%Y"))
+  
+  # Academic year starts July 1
+  # If today is before July 1, we're still in the previous academic year
+  current_academic_year <- ifelse(format(current_date, "%m-%d") >= "07-01",
+                                  current_calendar_year,
+                                  current_calendar_year - 1)
+  
+  cat("Current date:", as.character(current_date), "\n")
+  cat("Current calendar year:", current_calendar_year, "\n")
+  cat("Current academic year:", current_academic_year, "\n")
+  
+  # Debug: Show resident types and graduation years
+  cat("\nResident type distribution before calculation:\n")
+  type_table <- table(coach_data$type, useNA = "always")
+  print(type_table)
+  
+  cat("\nGraduation year distribution:\n")
+  grad_table <- table(coach_data$grad_yr, useNA = "always")
+  print(grad_table)
+  
+  coach_data <- coach_data %>%
+    mutate(
+      grad_yr = as.numeric(grad_yr),  # Ensure grad_yr is numeric
+      Level = case_when(
+        # Preliminary residents - they are 1-year residents
+        # Current academic year 2024-2025 (July 1, 2024 - June 30, 2025)
+        # Before July 1, 2025: Current prelims have grad_yr = 2025 (graduating June 2025)
+        # After July 1, 2025: New prelims have grad_yr = 2026 (will graduate June 2026)
+        
+        type == "Preliminary" & format(current_date, "%m-%d") < "07-01" & grad_yr == current_calendar_year ~ "Intern",
+        type == "Preliminary" & format(current_date, "%m-%d") >= "07-01" & grad_yr == current_calendar_year + 1 ~ "Intern",
+        
+        # Rotators - handle like preliminary residents (1-year program)
+        type == "Rotator" & format(current_date, "%m-%d") < "07-01" & grad_yr == current_calendar_year ~ "Intern",
+        type == "Rotator" & format(current_date, "%m-%d") >= "07-01" & grad_yr == current_calendar_year + 1 ~ "Intern",
+        
+        # Handle preliminary residents and rotators from previous/future years
+        type %in% c("Preliminary", "Rotator") & grad_yr < current_calendar_year ~ "Graduated",
+        type %in% c("Preliminary", "Rotator") & grad_yr > current_calendar_year + 1 ~ "Future",
+        
+        # Categorical residents - 3-year program based on academic year
+        # Academic year 2024-2025 (July 1, 2024 - June 30, 2025)
+        type == "Categorical" & grad_yr == current_academic_year + 1 ~ "PGY3",    # Graduate June 2025
+        type == "Categorical" & grad_yr == current_academic_year + 2 ~ "PGY2",    # Graduate June 2026
+        type == "Categorical" & grad_yr == current_academic_year + 3 ~ "Intern",  # Graduate June 2027 (current interns)
+        type == "Categorical" & grad_yr == current_academic_year + 4 ~ "Incoming", # Graduate June 2028 (incoming July 2025)
+        
+        TRUE ~ NA_character_
+      )
+    )
+  
+  # Debug output
+  cat("\nLevel distribution after calculation:\n")
+  level_table <- table(coach_data$Level, useNA = "always")
+  print(level_table)
+  
+  # Show examples by type and graduation year
+  cat("\nBreakdown by type and grad_yr:\n")
+  breakdown <- coach_data %>%
+    filter(!is.na(Level)) %>%
+    count(type, grad_yr, Level) %>%
+    arrange(type, grad_yr)
+  print(breakdown)
+  
+  # Specifically look for preliminary residents and rotators
+  prelim_count <- sum(coach_data$type == "Preliminary", na.rm = TRUE)
+  rotator_count <- sum(coach_data$type == "Rotator", na.rm = TRUE)
+  cat("\nTotal preliminary residents in data:", prelim_count, "\n")
+  cat("Total rotators in data:", rotator_count, "\n")
+  
+  if (prelim_count > 0) {
+    cat("Preliminary resident details:\n")
+    prelim_details <- coach_data %>%
+      filter(type == "Preliminary") %>%
+      select(name, type, grad_yr, Level) %>%
+      head(10)
+    print(prelim_details)
+  }
+  
+  if (rotator_count > 0) {
+    cat("Rotator details:\n")
+    rotator_details <- coach_data %>%
+      filter(type == "Rotator") %>%
+      select(name, type, grad_yr, Level) %>%
+      head(10)
+    print(rotator_details)
+  }
+  
+  return(coach_data)
+}
+
+# Filter residents for availability (exclude incoming interns before July 1) - CORRECTED FOR PRELIMS WITH DEBUGGING
+filter_available_residents <- function(data) {
+  current_date <- Sys.Date()
+  current_calendar_year <- as.numeric(format(current_date, "%Y"))
+  
+  cat("Filtering available residents...\n")
+  cat("Current date:", as.character(current_date), "\n")
+  cat("Current calendar year:", current_calendar_year, "\n")
+  
+  # Debug: Show what we have before filtering
+  cat("Before filtering - Level distribution:\n")
+  before_table <- table(data$Level, useNA = "always")
+  print(before_table)
+  
+  # Show preliminary residents and rotators before filtering
+  if (any(data$type %in% c("Preliminary", "Rotator"), na.rm = TRUE)) {
+    cat("Preliminary residents and rotators before filtering:\n")
+    prelim_rot_before <- data %>%
+      filter(type %in% c("Preliminary", "Rotator")) %>%
+      select(name, type, grad_yr, Level) %>%
+      head(15)
+    print(prelim_rot_before)
+  }
+  
+  # Before July 1, exclude incoming interns but keep current preliminary and categorical interns
+  if (format(current_date, "%m-%d") < "07-01") {
+    cat("Before July 1 - filtering out incoming categorical interns only\n")
+    
+    data <- data %>%
+      filter(
+        # Remove incoming categorical interns (Level == "Incoming")
+        Level != "Incoming" | is.na(Level),
+        
+        # Keep all residents with valid levels (Intern, PGY2, PGY3)
+        # Remove only those explicitly marked as "Graduated" or "Future"
+        !(Level %in% c("Graduated", "Future"))
+      )
+  } else {
+    cat("After July 1 - including new interns, excluding graduated residents\n")
+    
+    data <- data %>%
+      # Convert "Incoming" to "Intern" after July 1
+      mutate(Level = ifelse(Level == "Incoming", "Intern", Level)) %>%
+      # Remove residents who graduated or are future
+      filter(
+        !(Level %in% c("Graduated", "Future"))
+      )
+  }
+  
+  # Debug: Show what we have after filtering
+  cat("After filtering - Level distribution:\n")
+  after_table <- table(data$Level, useNA = "always")
+  print(after_table)
+  
+  # Show preliminary residents and rotators after filtering
+  if (any(data$type %in% c("Preliminary", "Rotator"), na.rm = TRUE)) {
+    cat("Preliminary residents and rotators after filtering:\n")
+    prelim_rot_after <- data %>%
+      filter(type %in% c("Preliminary", "Rotator")) %>%
+      select(name, type, grad_yr, Level) %>%
+      head(15)
+    print(prelim_rot_after)
+  }
+  
+  return(data)
+}
+
+# Process resident data - complete pipeline
+process_resident_data <- function(raw_data) {
+  cat("Processing resident data...\n")
+  cat("Initial rows:", nrow(raw_data), "\n")
+  
+  # Step 1: Remove archived residents
+  data <- remove_archived_residents(raw_data)
+  cat("After removing archived:", nrow(data), "\n")
+  
+  # Step 2: Calculate resident levels
+  data <- calculate_resident_level(data)
+  
+  # Step 3: Filter for available residents (based on date)
+  data <- filter_available_residents(data)
+  cat("After filtering available:", nrow(data), "\n")
+  
+  # Step 4: Remove residents without a Level (shouldn't be selectable)
+  data <- data %>% filter(!is.na(Level))
+  cat("After removing residents without Level:", nrow(data), "\n")
+  
+  # Note: No longer excluding Rotator record (157) - it's now processed as a rotator
+  
+  return(data)
+}
+
+# ============================================================================
 # FACULTY SUBMISSION FUNCTIONS
 # ============================================================================
 
@@ -148,9 +363,10 @@ submit_new_faculty_to_redcap <- function(faculty_data, token, url) {
 }
 
 # ============================================================================
-# RESIDENT EVALUATION FUNCTIONS (from original helpers.R)
+# RESIDENT EVALUATION FUNCTIONS
 # ============================================================================
 
+# Submit evaluation to REDCap
 submit_evaluation_to_redcap <- function(eval_data, token, url) {
   # Add the required fields that were missing
   
@@ -192,7 +408,7 @@ submit_evaluation_to_redcap <- function(eval_data, token, url) {
   return(response_text)
 }
 
-# Final clean version - using fieldNames parameter that works
+# Get next faculty evaluation instance number for a resident
 get_next_faculty_eval_instance <- function(resident_id, token, url) {
   tryCatch({
     cat("=== GETTING NEXT INSTANCE FOR RESIDENT ID:", resident_id, "===\n")
@@ -302,7 +518,7 @@ submit_pending_faculty_to_redcap <- function(pending_data, token, url) {
             max_instance <- max(instances)
             cat("Found existing pending_queue instances:", paste(sort(instances), collapse = ", "), "\n")
             cat("Next pending_queue instance:", max_instance + 1, "\n")
-            max_instance + 1  # ✅ Return value to next_instance variable, don't exit function
+            max_instance + 1
           } else {
             1
           }
@@ -314,11 +530,11 @@ submit_pending_faculty_to_redcap <- function(pending_data, token, url) {
       }
     } else {
       cat("No existing pending_queue instances found, starting with instance 1\n")
-      1  # ✅ Return value to next_instance variable, don't exit function
+      1
     }
   }, error = function(e) {
     cat("Warning: Could not get existing pending instances, using instance = 1\n")
-    1  # ✅ Return value to next_instance variable, don't exit function
+    1
   })
   
   redcap_data <- data.frame(
@@ -326,7 +542,7 @@ submit_pending_faculty_to_redcap <- function(pending_data, token, url) {
     redcap_repeat_instrument = "pending_queue",
     redcap_repeat_instance = as.character(next_instance),
     pend_name = pending_data$pend_name,
-    pend_fac_fell = pending_data$namepend_fac_fell,
+    pend_fac_fell = pending_data$pend_fac_fell,
     pend_rot = pending_data$pend_rot,
     pending_queue_complete = 2,
     stringsAsFactors = FALSE
@@ -359,6 +575,7 @@ submit_pending_faculty_to_redcap <- function(pending_data, token, url) {
   return(response_text)
 }
 
+# Count monthly faculty evaluations for a resident
 count_monthly_faculty_evals <- function(faculty_eval_data, resident_data, resident_name) {
   tryCatch({
     # Get resident record

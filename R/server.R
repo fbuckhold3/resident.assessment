@@ -1,11 +1,13 @@
-# server.R - Faculty Evaluation App (Corrected Version)
+# server.R - Faculty Evaluation App (Updated with Resident Selection)
 
 server <- function(input, output, session) {
   
   # Reactive values to track app state
   values <- reactiveValues(
     selected_faculty = NULL,
-    current_search_results = NULL
+    selected_resident = NULL,
+    current_search_results = NULL,
+    current_resident_results = NULL
   )
   
   # Show next steps when faculty is selected
@@ -13,6 +15,12 @@ server <- function(input, output, session) {
     !is.null(values$selected_faculty)
   })
   outputOptions(output, "show_next_steps", suspendWhenHidden = FALSE)
+  
+  # Show evaluation step when both faculty and resident are selected
+  output$show_evaluation_step <- reactive({
+    !is.null(values$selected_faculty) && !is.null(values$selected_resident)
+  })
+  outputOptions(output, "show_evaluation_step", suspendWhenHidden = FALSE)
   
   # ============================================================================
   # FACULTY SEARCH AND SELECTION
@@ -213,6 +221,165 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
+  # RESIDENT SEARCH AND SELECTION
+  # ============================================================================
+  
+  # Resident search functionality
+  filtered_residents <- reactive({
+    req(input$resident_search)
+    req(resident_data)
+    
+    search_term <- tolower(trimws(input$resident_search))
+    if (nchar(search_term) < 2) return(NULL)
+    
+    # Search in name field
+    filtered <- resident_data %>%
+      filter(!is.na(name) & 
+               grepl(search_term, tolower(name), fixed = TRUE)) %>%
+      arrange(Level, name) %>%  # Sort by level then name
+      head(15)  # Limit results
+    
+    cat("Resident search for '", search_term, "' returned ", nrow(filtered), " results\n")
+    
+    return(filtered)
+  })
+  
+  # Render resident search results
+  output$resident_search_results <- renderUI({
+    resident_results <- filtered_residents()
+    
+    if (is.null(resident_results) || nrow(resident_results) == 0) {
+      if (!is.null(input$resident_search) && nchar(trimws(input$resident_search)) >= 2) {
+        return(div(style = "padding: 10px; color: #666;", 
+                   "No residents found. Please check spelling."))
+      } else {
+        return(div(style = "padding: 10px; color: #666;", 
+                   "Start typing to search for a resident..."))
+      }
+    }
+    
+    # Store search results
+    values$current_resident_results <- resident_results
+    
+    result_list <- lapply(1:nrow(resident_results), function(i) {
+      resident <- resident_results[i, ]
+      
+      button_id <- paste0("select_resident_", i)
+      
+      # Build display text
+      resident_text <- paste0(resident$name, " (", resident$Level, ")")
+      
+      # Add graduation year if available
+      if (!is.na(resident$grad_yr)) {
+        resident_text <- paste0(resident_text, " - Class of ", resident$grad_yr)
+      }
+      
+      div(class = "search-result resident-result",
+          actionButton(button_id, 
+                       label = resident_text,
+                       style = "background: #f8f9fa; border: 1px solid #ddd; text-align: left; width: 100%; padding: 10px;",
+                       class = "btn btn-light")
+      )
+    })
+    
+    # Add rotator option at the end
+    rotator_button <- div(class = "search-result rotator-result",
+                          actionButton("select_rotator", 
+                                       label = "🔄 Rotator (External Resident)",
+                                       style = "background: #e8f4fd; border: 1px solid #0066a1; text-align: left; width: 100%; padding: 10px; font-weight: 600;",
+                                       class = "btn btn-info")
+    )
+    
+    do.call(tagList, c(result_list, list(rotator_button)))
+  })
+  
+  # Handle resident selection clicks
+  observe({
+    resident_results <- values$current_resident_results
+    if (!is.null(resident_results)) {
+      for (i in 1:nrow(resident_results)) {
+        local({
+          resident_index <- i
+          button_id <- paste0("select_resident_", resident_index)
+          
+          observeEvent(input[[button_id]], {
+            if (!is.null(resident_results) && resident_index <= nrow(resident_results)) {
+              values$selected_resident <- resident_results[resident_index, ]
+              
+              cat("Selected resident:", values$selected_resident$name, "\n")
+              
+              showNotification(
+                paste("Selected resident:", values$selected_resident$name), 
+                type = "default"
+              )
+            }
+          })
+        })
+      }
+    }
+  })
+  
+  # Handle rotator selection
+  observeEvent(input$select_rotator, {
+    # For now, create a placeholder rotator record
+    rotator_record <- data.frame(
+      record_id = "157",
+      name = "Rotator",
+      Level = "Rotator",
+      type = "Rotator",
+      grad_yr = NA,
+      stringsAsFactors = FALSE
+    )
+    
+    values$selected_resident <- rotator_record
+    
+    cat("Selected rotator\n")
+    
+    # Show modal or notification for rotator details (placeholder for future)
+    showNotification("Rotator selected. Additional rotator features coming soon.", 
+                     type = "message", duration = 3)
+  })
+  
+  # Display selected resident info
+  output$selected_resident_info <- renderUI({
+    if (!is.null(values$selected_resident)) {
+      resident <- values$selected_resident
+      
+      if (resident$record_id == "157") {
+        # Special display for rotator
+        div(
+          strong("Rotator Selected"),
+          br(),
+          "External/Visiting Resident",
+          br(), br(),
+          div(class = "resident-selected",
+              "✅ Rotator selected!")
+        )
+      } else {
+        # Regular resident display
+        div(
+          strong(resident$name),
+          br(),
+          paste("Level:", resident$Level),
+          br(),
+          if (!is.na(resident$grad_yr)) {
+            paste("Graduation Year:", resident$grad_yr)
+          },
+          br(),
+          if (!is.na(resident$type)) {
+            paste("Program Type:", resident$type)
+          },
+          br(), br(),
+          div(class = "resident-selected",
+              "✅ Resident selected successfully!")
+        )
+      }
+    } else {
+      div("Select a resident from the search results above.")
+    }
+  })
+  
+  # ============================================================================
   # MODAL AND FACULTY ADDITION
   # ============================================================================
   
@@ -407,9 +574,12 @@ server <- function(input, output, session) {
   # Start over button
   observeEvent(input$start_over, {
     values$selected_faculty <- NULL
+    values$selected_resident <- NULL
     values$current_search_results <- NULL
+    values$current_resident_results <- NULL
     
     # Clear inputs
     updateTextInput(session, "faculty_search", value = "")
+    updateTextInput(session, "resident_search", value = "")
   })
 }
