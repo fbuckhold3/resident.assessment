@@ -840,9 +840,42 @@ server <- function(input, output, session) {
     )
   })
   
+  observeEvent(input$submit_observation_evaluation, {
+    cat("=== DEBUGGING OBSERVATION SUBMISSION ===\n")
+    
+    # Print all input values that start with "ass"
+    all_inputs <- reactiveValuesToList(input)
+    ass_inputs <- all_inputs[grepl("^ass", names(all_inputs))]
+    
+    cat("All fields starting with 'ass':\n")
+    for (name in names(ass_inputs)) {
+      value <- ass_inputs[[name]]
+      cat(sprintf("  %s: %s\n", name, ifelse(is.null(value), "NULL", 
+                                             ifelse(value == "", "EMPTY", as.character(value)))))
+    }
+    
+    cat("\nSpecifically looking for Plus/Delta fields:\n")
+    cat("input$ass_plus:", ifelse(is.null(input$ass_plus), "NULL", input$ass_plus), "\n")
+    cat("input$ass_delta:", ifelse(is.null(input$ass_delta), "NULL", input$ass_delta), "\n")
+    cat("input$ass_obs_plus:", ifelse(is.null(input$ass_obs_plus), "NULL", input$ass_obs_plus), "\n")
+    cat("input$ass_obs_delta:", ifelse(is.null(input$ass_obs_delta), "NULL", input$ass_obs_delta), "\n")
+    
+    cat("Observation type:", input$ass_obs_type, "\n")
+    
+    # Continue with existing validation...
+    # [rest of your existing submission code]
+  })
+  
   # Build dynamic questions based on observation type
   output$obs_dynamic_questions <- renderUI({
     req(input$ass_obs_type)
+    
+    cat("=== FORM BUILDING DEBUG ===\n")
+    cat("Building form for observation type:", input$ass_obs_type, "\n")
+    
+    # Check what fields will be created
+    field_names <- get_obs_fields_for_type(input$ass_obs_type)
+    cat("Expected assessment fields:", paste(field_names, collapse = ", "), "\n")
     
     cat("=== BUILDING OBSERVATION DYNAMIC QUESTIONS ===\n")
     cat("Observation type:", input$ass_obs_type, "\n")
@@ -941,8 +974,20 @@ server <- function(input, output, session) {
       field_row <- question_fields[i, ]
       cat("Building question", i, ":", field_row$field_name, "\n")
       
-      # Build field based on type
-      if (field_row$field_type == "radio") {
+      # Special handling for Physical Exam yes/no fields
+      if (field_row$field_name %in% c("ass_obs_pe_3", "ass_obs_pe_4")) {
+        # These are yes/no fields, build as dropdown
+        div(class = "eval-field-group",
+            tags$label(field_row$field_label, class = "eval-field-label required"),
+            selectInput(
+              field_row$field_name,
+              label = NULL,
+              choices = list("Choose..." = "", "Yes" = "1", "No" = "0"),
+              selected = "",
+              width = "100%"
+            )
+        )
+      } else if (field_row$field_type == "radio") {
         build_radio_field_from_dict(field_row, required = TRUE)
       } else if (field_row$field_type == "dropdown") {
         build_dropdown_field_from_dict(field_row, required = TRUE)
@@ -987,6 +1032,195 @@ server <- function(input, output, session) {
     
     # Return the question elements
     tagList(question_elements)
+  })
+  
+  output$obs_dynamic_questions <- renderUI({
+    cat("=== OBS DYNAMIC QUESTIONS DEBUG START ===\n")
+    
+    # Check if input exists
+    cat("input$ass_obs_type exists:", !is.null(input$ass_obs_type), "\n")
+    cat("input$ass_obs_type value:", ifelse(is.null(input$ass_obs_type), "NULL", input$ass_obs_type), "\n")
+    
+    # Early return test
+    if (is.null(input$ass_obs_type) || input$ass_obs_type == "") {
+      cat("❌ Exiting early - no observation type selected\n")
+      return(div("No observation type selected"))
+    }
+    
+    cat("✅ Observation type is valid:", input$ass_obs_type, "\n")
+    
+    # Check if helper function exists
+    if (!exists("get_obs_fields_for_type")) {
+      cat("❌ Function get_obs_fields_for_type does not exist\n")
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Function Missing", style = "color: #721c24;"),
+        p("get_obs_fields_for_type function not found in evaluation_form_builder.R")
+      ))
+    }
+    
+    cat("✅ get_obs_fields_for_type function exists\n")
+    
+    # Try to get field names
+    tryCatch({
+      field_names <- get_obs_fields_for_type(input$ass_obs_type)
+      cat("✅ Got field names:", paste(field_names, collapse = ", "), "\n")
+      cat("Field count:", length(field_names), "\n")
+    }, error = function(e) {
+      cat("❌ Error getting field names:", e$message, "\n")
+      return(div("Error getting field names:", e$message))
+    })
+    
+    if (length(field_names) == 0) {
+      cat("❌ No fields found for observation type\n")
+      return(div(
+        style = "padding: 1rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; text-align: center;",
+        h6("No Questions Available", style = "color: #856404;"),
+        p("No evaluation questions found for this observation type.")
+      ))
+    }
+    
+    # Check data dictionary
+    if (!exists("rdm_dict") || is.null(rdm_dict)) {
+      cat("❌ rdm_dict is missing or null\n")
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Configuration Error", style = "color: #721c24;"),
+        p("Data dictionary not available.")
+      ))
+    }
+    
+    cat("✅ rdm_dict exists with", nrow(rdm_dict), "rows\n")
+    
+    # Try to filter data dictionary
+    tryCatch({
+      question_fields <- rdm_dict %>%
+        filter(form_name == "assessment") %>%
+        filter(field_name %in% field_names) %>%
+        arrange(match(field_name, field_names))
+      
+      cat("✅ Found", nrow(question_fields), "questions in data dictionary\n")
+      cat("Question field names:", paste(question_fields$field_name, collapse = ", "), "\n")
+    }, error = function(e) {
+      cat("❌ Error filtering data dictionary:", e$message, "\n")
+      return(div("Error filtering data dictionary:", e$message))
+    })
+    
+    if (nrow(question_fields) == 0) {
+      cat("❌ No matching fields found in data dictionary\n")
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Questions Not Found", style = "color: #721c24;"),
+        p("The expected question fields were not found in the data dictionary."),
+        p("Expected fields:", paste(field_names, collapse = ", "))
+      ))
+    }
+    
+    # Special handling for Clinical Decision Making (text field)
+    if (input$ass_obs_type == "1") {
+      cat("✅ Building Clinical Decision Making text area\n")
+      cdm_field <- question_fields[question_fields$field_name == "ass_obs_cdm", ]
+      if (nrow(cdm_field) > 0) {
+        return(
+          div(class = "eval-field-group",
+              tags$label(cdm_field$field_label, class = "eval-field-label required"),
+              div(class = "textarea-container",
+                  tags$textarea(
+                    id = "ass_obs_cdm",
+                    class = "form-control eval-textarea",
+                    placeholder = "Describe the clinical decision making process observed...",
+                    rows = "4"
+                  )
+              ),
+              div(class = "eval-field-help", "Provide detailed observations of the resident's clinical reasoning.")
+          )
+        )
+      }
+    }
+    
+    # Check if form building functions exist
+    if (!exists("build_radio_field_from_dict")) {
+      cat("❌ build_radio_field_from_dict function missing\n")
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Function Missing", style = "color: #721c24;"),
+        p("build_radio_field_from_dict function not found")
+      ))
+    }
+    
+    cat("✅ Form building functions exist\n")
+    
+    # Try to build questions
+    tryCatch({
+      question_elements <- lapply(1:nrow(question_fields), function(i) {
+        field_row <- question_fields[i, ]
+        cat("Building question", i, ":", field_row$field_name, "type:", field_row$field_type, "\n")
+        
+        # Special handling for Physical Exam yes/no fields
+        if (field_row$field_name %in% c("ass_obs_pe_3", "ass_obs_pe_4")) {
+          cat("  → Building as yes/no dropdown\n")
+          return(div(class = "eval-field-group",
+                     tags$label(field_row$field_label, class = "eval-field-label required"),
+                     selectInput(
+                       field_row$field_name,
+                       label = NULL,
+                       choices = list("Choose..." = "", "Yes" = "1", "No" = "0"),
+                       selected = "",
+                       width = "100%"
+                     ),
+                     div(class = "eval-field-help", "Select Yes or No")
+          ))
+        }
+        
+        # Build field based on type
+        if (field_row$field_type == "radio") {
+          cat("  → Building as radio buttons\n")
+          build_radio_field_from_dict(field_row, required = TRUE)
+        } else if (field_row$field_type == "dropdown") {
+          cat("  → Building as dropdown\n")
+          build_dropdown_field_from_dict(field_row, required = TRUE)
+        } else {
+          cat("  → Building as text input (default)\n")
+          div(class = "eval-field-group",
+              tags$label(field_row$field_label, class = "eval-field-label required"),
+              textInput(
+                field_row$field_name,
+                label = NULL,
+                placeholder = paste("Enter", tolower(field_row$field_label), "...")
+              )
+          )
+        }
+      })
+      
+      cat("✅ Built", length(question_elements), "question elements\n")
+      cat("=== OBS DYNAMIC QUESTIONS DEBUG END ===\n")
+      
+      # Return the question elements
+      return(tagList(question_elements))
+      
+    }, error = function(e) {
+      cat("❌ Error building questions:", e$message, "\n")
+      return(div("Error building questions:", e$message))
+    })
+  })
+  
+  # Also add this to check when the observation type changes:
+  observeEvent(input$ass_obs_type, {
+    cat("=== OBSERVATION TYPE CHANGED ===\n")
+    cat("New value:", input$ass_obs_type, "\n")
+    cat("Time:", Sys.time(), "\n")
+  })
+  
+  # And check the manual selection:
+  observeEvent(input$obs_type_manually_selected, {
+    cat("=== MANUAL OBSERVATION SELECTION ===\n")
+    if (!is.null(input$obs_type_manually_selected)) {
+      selection_data <- input$obs_type_manually_selected
+      cat("Selection data received:\n")
+      print(selection_data)
+    } else {
+      cat("Selection data is NULL\n")
+    }
   })
   
   # Handle observation evaluation submission
@@ -1147,11 +1381,68 @@ server <- function(input, output, session) {
   
   # Individual submission handlers
   observeEvent(input$submit_single_day_evaluation, {
-    if (exists("validate_single_day_clinic_form") && exists("collect_single_day_clinic_data")) {
-      handle_evaluation_submission("day", validate_single_day_clinic_form, collect_single_day_clinic_data)
-    } else {
-      showNotification("Single day clinic functions not found.", type = "error", duration = 5)
-    }
+    tryCatch({
+      cat("=== SUBMITTING DAY EVALUATION ===\n")
+      
+      # Validate required objects exist
+      if (is.null(values$selected_faculty)) {
+        showNotification("Faculty selection was lost. Please select faculty again.", type = "error")
+        values$current_step <- "faculty"
+        return()
+      }
+      
+      if (is.null(values$selected_resident)) {
+        showNotification("Resident selection was lost. Please select resident again.", type = "error")
+        values$current_step <- "resident"
+        return()
+      }
+      
+      # Debug: Print current state
+      cat("Faculty:", values$selected_faculty$fac_name, "\n")
+      cat("Resident:", values$selected_resident$name, "ID:", values$selected_resident$record_id, "\n")
+      
+      if (exists("validate_single_day_clinic_form") && exists("collect_single_day_clinic_data")) {
+        missing_fields <- validate_single_day_clinic_form(input)
+        
+        if (length(missing_fields) > 0) {
+          showNotification(
+            paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
+            type = "error",
+            duration = 5
+          )
+          return()
+        }
+        
+        eval_data <- collect_single_day_clinic_data(input, values$selected_faculty, values$selected_resident)
+        
+        result <- submit_evaluation_data(
+          eval_data = eval_data,
+          eval_type = "day",
+          resident_id = values$selected_resident$record_id,
+          token = rdm_token,
+          url = url
+        )
+        
+        showNotification("✅ Single Day Clinic evaluation submitted successfully!", type = "default", duration = 5)
+        
+        # Reset to resident selection (keep faculty selected)
+        values$selected_resident <- NULL
+        values$selected_eval_type <- NULL
+        values$current_step <- "resident"
+        updateTextInput(session, "resident_search", value = "")
+        
+      } else {
+        showNotification("Single day clinic functions not found.", type = "error", duration = 5)
+      }
+      
+    }, error = function(e) {
+      cat("Error submitting single day evaluation:", e$message, "\n")
+      showNotification(
+        paste("❌ Error submitting evaluation:", e$message),
+        type = "error",
+        duration = 8
+      )
+    })
   })
   
   observeEvent(input$submit_consultation_evaluation, {

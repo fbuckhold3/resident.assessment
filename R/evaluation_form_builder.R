@@ -1068,111 +1068,105 @@ build_observation_form <- function() {
     ),
     
     # Step 2: Plus/Delta section (visible after observation type selection)
-    conditionalPanel(
-      condition = "input.ass_obs_type != null && input.ass_obs_type != ''",
-      div(class = "eval-section",
-          div(class = "eval-section-header",
-              h4("Step 2: Required Feedback", class = "eval-section-title"),
-              uiOutput("obs_type_subtitle")  # Dynamic subtitle based on selected type
-          ),
-          
-          div(class = "eval-form-grid",
-              # Plus comments
-              div(class = "eval-field-group",
-                  tags$label("Plus - What did the resident do well?", class = "eval-field-label required"),
-                  div(class = "textarea-container",
-                      tags$textarea(
-                        id = "ass_obs_plus",  # Observation-specific ID
-                        class = "form-control eval-textarea",
-                        placeholder = "Describe specific strengths and positive observations...",
-                        rows = "4",
-                        onchange = "checkObsPlusDeltaComplete()",
-                        oninput = "checkObsPlusDeltaComplete()"
-                      ),
-                      # Speech-to-text button
-                      conditionalPanel(
-                        condition = "window.location.protocol === 'https:'",
-                        tags$button(
-                          type = "button",
-                          class = "btn btn-outline-secondary speech-btn",
-                          onclick = "startSpeechRecognition('ass_obs_plus')",
-                          title = "Click to use voice input",
-                          style = "position: absolute; right: 10px; top: 10px; padding: 5px 10px;",
-                          "🎤"
+    # REMOVED conditionalPanel - using JavaScript control instead
+    div(id = "obs_plus_delta_section", style = "display: none;",
+        div(class = "eval-section",
+            div(class = "eval-section-header",
+                h4("Step 2: Required Feedback", class = "eval-section-title"),
+                uiOutput("obs_type_subtitle")
+            ),
+            
+            div(class = "eval-form-grid",
+                # Plus comments
+                div(class = "eval-field-group",
+                    tags$label("Plus - What did the resident do well?", class = "eval-field-label required"),
+                    div(class = "textarea-container",
+                        tags$textarea(
+                          id = "ass_obs_plus",
+                          class = "form-control eval-textarea",
+                          placeholder = "Describe specific strengths and positive observations...",
+                          rows = "4",
+                          onchange = "checkObsPlusDeltaComplete()",
+                          oninput = "checkObsPlusDeltaComplete()"
+                        ),
+                        # Speech-to-text button
+                        conditionalPanel(
+                          condition = "window.location.protocol === 'https:'",
+                          tags$button(
+                            type = "button",
+                            class = "btn btn-outline-secondary speech-btn",
+                            onclick = "startSpeechRecognition('ass_obs_plus')",
+                            title = "Click to use voice input",
+                            style = "position: absolute; right: 10px; top: 10px; padding: 5px 10px;",
+                            "🎤"
+                          )
                         )
-                      )
-                  ),
-                  div(class = "eval-field-help", 
-                      "Provide specific, actionable feedback on what the resident excelled at.")
-              ),
-              
-              # Delta comments  
-              div(class = "eval-field-group",
-                  tags$label("Delta - Areas for improvement", class = "eval-field-label required"),
-                  div(class = "textarea-container",
-                      tags$textarea(
-                        id = "ass_obs_delta",  # Observation-specific ID
-                        class = "form-control eval-textarea",
-                        placeholder = "Describe specific opportunities for growth...",
-                        rows = "4",
-                        onchange = "checkObsPlusDeltaComplete()",
-                        oninput = "checkObsPlusDeltaComplete()"
-                      ),
-                      # Speech-to-text button
-                      conditionalPanel(
-                        condition = "window.location.protocol === 'https:'",
-                        tags$button(
-                          type = "button",
-                          class = "btn btn-outline-secondary speech-btn",
-                          onclick = "startSpeechRecognition('ass_obs_delta')",
-                          title = "Click to use voice input",
-                          style = "position: absolute; right: 10px; top: 10px; padding: 5px 10px;",
-                          "🎤"
+                    ),
+                    div(class = "eval-field-help", 
+                        "Provide specific, actionable feedback on what the resident excelled at.")
+                ),
+                
+                # Delta comments  
+                div(class = "eval-field-group",
+                    tags$label("Delta - Areas for improvement", class = "eval-field-label required"),
+                    div(class = "textarea-container",
+                        tags$textarea(
+                          id = "ass_obs_delta",
+                          class = "form-control eval-textarea",
+                          placeholder = "Describe specific opportunities for growth...",
+                          rows = "4",
+                          onchange = "checkObsPlusDeltaComplete()",
+                          oninput = "checkObsPlusDeltaComplete()"
+                        ),
+                        # Speech-to-text button
+                        conditionalPanel(
+                          condition = "window.location.protocol === 'https:'",
+                          tags$button(
+                            type = "button",
+                            class = "btn btn-outline-secondary speech-btn",
+                            onclick = "startSpeechRecognition('ass_obs_delta')",
+                            title = "Click to use voice input",
+                            style = "position: absolute; right: 10px; top: 10px; padding: 5px 10px;",
+                            "🎤"
+                          )
                         )
-                      )
-                  ),
-                  div(class = "eval-field-help",
-                      "Provide constructive feedback on areas where the resident can improve.")
-              )
-          ),
-          
-          # Continue button (initially hidden)
-          div(class = "text-center mt-3",
-              actionButton("continue_to_obs_assessment", "Continue to Assessment Questions →", 
-                           class = "btn btn-primary btn-lg", style = "display: none;")
-          )
-      )
+                    ),
+                    div(class = "eval-field-help",
+                        "Provide constructive feedback on areas where the resident can improve.")
+                )
+            ),
+            
+            # Continue button (initially hidden)
+            div(class = "text-center mt-3",
+                actionButton("continue_to_obs_assessment", "Continue to Assessment Questions →", 
+                             class = "btn btn-primary btn-lg", style = "display: none;")
+            )
+        )
     ),
     
     # Step 3: Dynamic Assessment Questions (initially hidden)
-    conditionalPanel(
-      condition = "input.ass_obs_type != null && input.ass_obs_type != ''",
-      div(id = "obs_assessment_questions_section", style = "display: none;",
-          div(class = "eval-section",
-              div(class = "eval-section-header",
-                  h4("Step 3: Assessment Questions", class = "eval-section-title"),
-                  p("Rate the resident's performance for this observation type:", 
-                    class = "eval-section-description")
-              ),
-              
-              div(class = "eval-questions-container",
-                  uiOutput("obs_dynamic_questions")
-              )
-          )
-      )
+    div(id = "obs_assessment_questions_section", style = "display: none;",
+        div(class = "eval-section",
+            div(class = "eval-section-header",
+                h4("Step 3: Assessment Questions", class = "eval-section-title"),
+                p("Rate the resident's performance for this observation type:", 
+                  class = "eval-section-description")
+            ),
+            
+            div(class = "eval-questions-container",
+                uiOutput("obs_dynamic_questions")
+            )
+        )
     ),
     
     # Form controls (initially hidden, shown after plus/delta complete)
-    conditionalPanel(
-      condition = "input.ass_obs_type != null && input.ass_obs_type != ''",
-      div(id = "obs_form_controls_section", class = "eval-form-controls", style = "display: none;",
-          div(class = "text-center mt-4",
-              actionButton("back_to_eval_selection", "← Back to Evaluation Types", 
-                           class = "btn btn-secondary me-2"),
-              actionButton("submit_observation_evaluation", "Submit Evaluation", 
-                           class = "btn btn-success btn-lg")
-          )
-      )
+    div(id = "obs_form_controls_section", class = "eval-form-controls", style = "display: none;",
+        div(class = "text-center mt-4",
+            actionButton("back_to_eval_selection", "← Back to Evaluation Types", 
+                         class = "btn btn-secondary me-2"),
+            actionButton("submit_observation_evaluation", "Submit Evaluation", 
+                         class = "btn btn-success btn-lg")
+        )
     ),
     
     # Hidden input to track selected observation type
@@ -1180,11 +1174,23 @@ build_observation_form <- function() {
       textInput("ass_obs_type", "", value = "")
     ),
     
-    # JavaScript for progressive disclosure
+    # Updated JavaScript for progressive disclosure
     tags$script(HTML("
+      // Show plus/delta section when observation type is selected
+      function showObsPlusDeltaSection() {
+        $('#obs_plus_delta_section').slideDown(500);
+        // Scroll to the section
+        setTimeout(function() {
+          $('#obs_plus_delta_section')[0].scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          });
+        }, 600);
+      }
+      
       // Check if Plus and Delta are both completed for observations
       function checkObsPlusDeltaComplete() {
-        var plusValue = $('#ass_obs_plus').val();  // Use observation-specific IDs
+        var plusValue = $('#ass_obs_plus').val();
         var deltaValue = $('#ass_obs_delta').val();
         
         console.log('Checking obs plus/delta:', plusValue ? 'has plus' : 'no plus', deltaValue ? 'has delta' : 'no delta');
@@ -1231,6 +1237,32 @@ build_observation_form <- function() {
         }, 600);
       });
       
+      // Function called when observation type is selected
+      function selectObservationType(typeId, typeName) {
+        console.log('Selecting observation type:', typeId, typeName);
+        
+        // Set the observation type value
+        Shiny.setInputValue('ass_obs_type', typeId, {priority: 'event'});
+        
+        // Store selection info for the server
+        Shiny.setInputValue('obs_type_manually_selected', {
+          type: typeId,
+          name: typeName,
+          timestamp: new Date().getTime()
+        }, {priority: 'event'});
+        
+        // Visual feedback
+        document.querySelectorAll('.obs-type-button').forEach(function(el) {
+          el.classList.remove('selected');
+        });
+        
+        // Highlight selected type
+        event.currentTarget.classList.add('selected');
+        
+        // Show the plus/delta section
+        showObsPlusDeltaSection();
+      }
+      
       // Bind events to observation textareas when they're created
       function bindObsEvents() {
         $('#ass_obs_plus, #ass_obs_delta').off('input paste keyup change').on('input paste keyup change', function() {
@@ -1258,17 +1290,6 @@ build_observation_form <- function() {
           }, 1000);
         }
       });
-      
-      // Also bind when conditional panels show/hide
-      $(document).on('DOMNodeInserted', function(e) {
-        if ($(e.target).find('#ass_obs_plus, #ass_obs_delta').length) {
-          console.log('Obs Plus/Delta textareas detected, binding events');
-          setTimeout(function() {
-            bindObsEvents();
-            checkObsPlusDeltaComplete();
-          }, 100);
-        }
-      });
     "))
   )
 }
@@ -1276,6 +1297,134 @@ build_observation_form <- function() {
 # ============================================================================
 # OBSERVATION TYPE SELECTION BUILDER
 # ============================================================================
+
+# Simple, reliable observation form - replace your build_observation_form() function:
+
+build_observation_form <- function() {
+  tagList(
+    # Step 1: Observation Type Selection (always visible)
+    div(class = "eval-section",
+        div(class = "eval-section-header",
+            h4("Step 1: Select Observation Type", class = "eval-section-title"),
+            p("Click on the type of observation you are evaluating:", 
+              class = "eval-section-description")
+        ),
+        
+        # Observation type buttons
+        uiOutput("observation_type_selection")
+    ),
+    
+    # Step 2: Plus/Delta section (shows when observation type is selected)
+    conditionalPanel(
+      condition = "input.ass_obs_type != null && input.ass_obs_type != ''",
+      div(class = "eval-section",
+          div(class = "eval-section-header",
+              h4("Step 2: Required Feedback", class = "eval-section-title"),
+              uiOutput("obs_type_subtitle")
+          ),
+          
+          div(class = "eval-form-grid",
+              # Plus comments
+              div(class = "eval-field-group",
+                  tags$label("Plus - What did the resident do well?", class = "eval-field-label required"),
+                  tags$textarea(
+                    id = "ass_obs_plus",
+                    class = "form-control eval-textarea",
+                    placeholder = "Describe specific strengths and positive observations...",
+                    rows = "4"
+                  ),
+                  div(class = "eval-field-help", 
+                      "Provide specific, actionable feedback on what the resident excelled at.")
+              ),
+              
+              # Delta comments  
+              div(class = "eval-field-group",
+                  tags$label("Delta - Areas for improvement", class = "eval-field-label required"),
+                  tags$textarea(
+                    id = "ass_obs_delta",
+                    class = "form-control eval-textarea",
+                    placeholder = "Describe specific opportunities for growth...",
+                    rows = "4"
+                  ),
+                  div(class = "eval-field-help",
+                      "Provide constructive feedback on areas where the resident can improve.")
+              )
+          )
+      )
+    ),
+    
+    # Step 3: Assessment Questions (shows when observation type is selected)
+    conditionalPanel(
+      condition = "input.ass_obs_type != null && input.ass_obs_type != ''",
+      div(class = "eval-section",
+          div(class = "eval-section-header",
+              h4("Step 3: Assessment Questions", class = "eval-section-title"),
+              p("Rate the resident's performance for this observation type:", 
+                class = "eval-section-description")
+          ),
+          
+          div(class = "eval-questions-container",
+              uiOutput("obs_dynamic_questions")
+          )
+      )
+    ),
+    
+    # Form controls (shows when observation type is selected)
+    conditionalPanel(
+      condition = "input.ass_obs_type != null && input.ass_obs_type != ''",
+      div(class = "eval-form-controls",
+          div(class = "text-center mt-4",
+              actionButton("back_to_eval_selection", "← Back to Evaluation Types", 
+                           class = "btn btn-secondary me-2"),
+              actionButton("submit_observation_evaluation", "Submit Evaluation", 
+                           class = "btn btn-success btn-lg")
+          )
+      )
+    ),
+    
+    # Hidden input to track selected observation type
+    shinyjs::hidden(
+      textInput("ass_obs_type", "", value = "")
+    ),
+    
+    # Simple JavaScript for observation type selection
+    tags$script(HTML("
+      function selectObservationType(typeId, typeName) {
+        console.log('Selecting observation type:', typeId, typeName);
+        
+        // Set the observation type value
+        Shiny.setInputValue('ass_obs_type', typeId, {priority: 'event'});
+        
+        // Store selection info for the server
+        Shiny.setInputValue('obs_type_manually_selected', {
+          type: typeId,
+          name: typeName,
+          timestamp: new Date().getTime()
+        }, {priority: 'event'});
+        
+        // Visual feedback
+        document.querySelectorAll('.obs-type-button').forEach(function(el) {
+          el.classList.remove('selected');
+        });
+        
+        // Highlight selected type
+        if (event && event.currentTarget) {
+          event.currentTarget.classList.add('selected');
+        }
+        
+        // Scroll to next section after a brief delay
+        setTimeout(function() {
+          var nextSection = document.querySelector('.eval-section:nth-child(2)');
+          if (nextSection) {
+            nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 200);
+      }
+    "))
+  )
+}
+
+# Also, let's update the observation type buttons to prevent multiple clicks:
 
 build_observation_type_buttons <- function(resident_level) {
   # Define observation types with metadata
@@ -1394,6 +1543,7 @@ build_observation_type_buttons <- function(resident_level) {
           div(
             class = button_class,
             onclick = if (is_available) paste0("selectObservationType('", obs_type$id, "', '", obs_type$name, "');") else NULL,
+            style = if (is_available) "cursor: pointer;" else NULL,
             div(class = "obs-type-icon", obs_type$icon),
             div(class = "obs-type-title", obs_type$name),
             div(class = "obs-type-description", obs_type$description),
@@ -1402,40 +1552,7 @@ build_observation_type_buttons <- function(resident_level) {
             }
           )
         })
-    ),
-    
-    # JavaScript for observation type selection
-    tags$script(HTML("
-      function selectObservationType(typeId, typeName) {
-        console.log('Selecting observation type:', typeId, typeName);
-        
-        // Set the observation type value
-        Shiny.setInputValue('ass_obs_type', typeId, {priority: 'event'});
-        
-        // Store selection info for the server
-        Shiny.setInputValue('obs_type_manually_selected', {
-          type: typeId,
-          name: typeName,
-          timestamp: new Date().getTime()
-        }, {priority: 'event'});
-        
-        // Visual feedback
-        document.querySelectorAll('.obs-type-button').forEach(function(el) {
-          el.classList.remove('selected');
-        });
-        
-        // Highlight selected type
-        event.currentTarget.classList.add('selected');
-        
-        // Scroll to next section after a brief delay
-        setTimeout(function() {
-          var nextSection = document.querySelector('.eval-section:nth-child(2)');
-          if (nextSection) {
-            nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }, 200);
-      }
-    "))
+    )
   )
 }
 
@@ -1443,13 +1560,15 @@ build_observation_type_buttons <- function(resident_level) {
 # DYNAMIC QUESTIONS BASED ON OBSERVATION TYPE
 # ============================================================================
 
+# Fix the get_obs_fields_for_type function in evaluation_form_builder.R
+
 get_obs_fields_for_type <- function(obs_type) {
   cat("Getting observation fields for type:", obs_type, "\n")
   
   field_mapping <- list(
     "1" = c("ass_obs_cdm"),  # Clinical Decision Making - text field
     "2" = c("ass_obs_acp"),  # Advance Care Planning
-    "3" = c("ass_obs_educat"),  # Educational Session
+    "3" = c("ass_educat"),   # Educational Session - FIXED: removed "obs_" prefix
     "4" = c("ass_obs_pe1", "ass_obs_pe2", "ass_obs_pe_3", "ass_obs_pe_4"),  # Physical Exam
     "5" = c("ass_obs_pres_1", "ass_obs_pres_2", "ass_obs_pres_3"),  # Presentation
     "6" = c("ass_obs_writehp_1", "ass_obs_writehp_2", "ass_obs_writehp_3", "ass_obs_writehp_4"),  # Written H&P
