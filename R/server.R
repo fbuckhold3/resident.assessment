@@ -1,4 +1,4 @@
-# server.R - Faculty Evaluation App (Updated with Resident Selection)
+# server.R - Faculty Evaluation App (Cleaned Version)
 
 server <- function(input, output, session) {
   
@@ -6,27 +6,60 @@ server <- function(input, output, session) {
   values <- reactiveValues(
     selected_faculty = NULL,
     selected_resident = NULL,
+    selected_eval_type = NULL,
     current_search_results = NULL,
-    current_resident_results = NULL
+    current_resident_results = NULL,
+    current_step = "faculty"
   )
   
-  # Show next steps when faculty is selected
-  output$show_next_steps <- reactive({
-    !is.null(values$selected_faculty)
-  })
-  outputOptions(output, "show_next_steps", suspendWhenHidden = FALSE)
+  # Helper function to get field name safely
+  get_field_name <- function(data, preferred_fields) {
+    for (field in preferred_fields) {
+      if (field %in% names(data)) {
+        return(field)
+      }
+    }
+    return(names(data)[1])  # fallback
+  }
   
-  # Show evaluation step when both faculty and resident are selected
-  output$show_evaluation_step <- reactive({
-    !is.null(values$selected_faculty) && !is.null(values$selected_resident)
+  # Manage current step display
+  output$current_step <- reactive({
+    values$current_step
   })
-  outputOptions(output, "show_evaluation_step", suspendWhenHidden = FALSE)
+  outputOptions(output, "current_step", suspendWhenHidden = FALSE)
+  
+  # ============================================================================
+  # NAVIGATION BETWEEN STEPS
+  # ============================================================================
+  
+  observeEvent(input$back_to_faculty, {
+    values$current_step <- "faculty"
+    values$selected_resident <- NULL
+    values$selected_eval_type <- NULL
+    updateTextInput(session, "resident_search", value = "")
+  })
+  
+  observeEvent(input$back_to_resident, {
+    values$current_step <- "resident"
+    values$selected_eval_type <- NULL
+  })
+  
+  observeEvent(input$start_over, {
+    values$selected_faculty <- NULL
+    values$selected_resident <- NULL
+    values$selected_eval_type <- NULL
+    values$current_search_results <- NULL
+    values$current_resident_results <- NULL
+    values$current_step <- "faculty"
+    
+    updateTextInput(session, "faculty_search", value = "")
+    updateTextInput(session, "resident_search", value = "")
+  })
   
   # ============================================================================
   # FACULTY SEARCH AND SELECTION
   # ============================================================================
   
-  # Faculty search functionality
   filtered_faculty <- reactive({
     req(input$faculty_search)
     req(faculty_data)
@@ -34,91 +67,49 @@ server <- function(input, output, session) {
     search_term <- tolower(trimws(input$faculty_search))
     if (nchar(search_term) < 2) return(NULL)
     
-    # Search in name field - prioritizing fac_name based on your structure
-    name_field <- if ("fac_name" %in% names(faculty_data)) {
-      "fac_name"
-    } else if ("name" %in% names(faculty_data)) {
-      "name"
-    } else if ("faculty_name" %in% names(faculty_data)) {
-      "faculty_name"
-    } else {
-      names(faculty_data)[1]  # fallback to first column
-    }
+    name_field <- get_field_name(faculty_data, c("fac_name", "name", "faculty_name"))
     
     cat("Using name field:", name_field, "\n")
     
     filtered <- faculty_data %>%
       filter(!is.na(.data[[name_field]]) & 
                grepl(search_term, tolower(.data[[name_field]]), fixed = TRUE)) %>%
-      head(10)  # Limit results
+      head(10)
     
     cat("Faculty search for '", search_term, "' returned ", nrow(filtered), " results\n")
-    
     return(filtered)
   })
   
-  # Render faculty search results
   output$faculty_search_results <- renderUI({
     faculty_results <- filtered_faculty()
     
     if (is.null(faculty_results) || nrow(faculty_results) == 0) {
-      if (!is.null(input$faculty_search) && nchar(trimws(input$faculty_search)) >= 2) {
-        return(div(style = "padding: 10px; color: #666;", 
-                   "No faculty found. Please check spelling or add yourself below."))
+      message <- if (!is.null(input$faculty_search) && nchar(trimws(input$faculty_search)) >= 2) {
+        "No faculty found. Please check spelling or add yourself below."
       } else {
-        return(div(style = "padding: 10px; color: #666;", 
-                   "Start typing to search for your name..."))
+        "Start typing to search for your name..."
       }
+      return(div(style = "padding: 10px; color: #666;", message))
     }
     
-    # Store search results
     values$current_search_results <- faculty_results
-    
-    # Determine name field - prioritizing fac_name
-    name_field <- if ("fac_name" %in% names(faculty_results)) {
-      "fac_name"
-    } else if ("name" %in% names(faculty_results)) {
-      "name"
-    } else if ("faculty_name" %in% names(faculty_results)) {
-      "faculty_name"
-    } else {
-      names(faculty_results)[1]
-    }
+    name_field <- get_field_name(faculty_results, c("fac_name", "name", "faculty_name"))
     
     result_list <- lapply(1:nrow(faculty_results), function(i) {
       faculty <- faculty_results[i, ]
-      
       button_id <- paste0("select_faculty_", i)
       
-      # Build display text - adjust field names based on your data
+      # Build display text
       faculty_text <- faculty[[name_field]]
       
       # Add department/division if available
-      dept_field <- if ("fac_div" %in% names(faculty)) {
-        "fac_div"
-      } else if ("department" %in% names(faculty)) {
-        "department"
-      } else if ("division" %in% names(faculty)) {
-        "division"
-      } else {
-        NULL
-      }
-      
+      dept_field <- get_field_name(faculty, c("fac_div", "department", "division"))
       if (!is.null(dept_field) && !is.na(faculty[[dept_field]])) {
         faculty_text <- paste0(faculty_text, " - ", faculty[[dept_field]])
       }
       
-      # Add faculty/fellow designation if available
-      role_field <- if ("fac_fell" %in% names(faculty)) {
-        "fac_fell"
-      } else if ("role" %in% names(faculty)) {
-        "role"
-      } else if ("position" %in% names(faculty)) {
-        "position"
-      } else {
-        NULL
-      }
-      
+      # Add role if available
+      role_field <- get_field_name(faculty, c("fac_fell", "role", "position"))
       if (!is.null(role_field) && !is.na(faculty[[role_field]])) {
         faculty_text <- paste0(faculty_text, " (", faculty[[role_field]], ")")
       }
@@ -147,21 +138,11 @@ server <- function(input, output, session) {
             if (!is.null(faculty_results) && faculty_index <= nrow(faculty_results)) {
               values$selected_faculty <- faculty_results[faculty_index, ]
               
-              # Determine name field for logging - prioritizing fac_name
-              name_field <- if ("fac_name" %in% names(values$selected_faculty)) {
-                "fac_name"
-              } else if ("name" %in% names(values$selected_faculty)) {
-                "name"
-              } else {
-                names(values$selected_faculty)[1]
-              }
-              
+              name_field <- get_field_name(values$selected_faculty, c("fac_name", "name", "faculty_name"))
               cat("Selected faculty:", values$selected_faculty[[name_field]], "\n")
               
-              showNotification(
-                paste("Selected:", values$selected_faculty[[name_field]]), 
-                type = "default"
-              )
+              values$current_step <- "resident"
+              showNotification(paste("Selected:", values$selected_faculty[[name_field]]), type = "default")
             }
           })
         })
@@ -169,35 +150,13 @@ server <- function(input, output, session) {
     }
   })
   
-  # Display selected faculty info
   output$selected_faculty_info <- renderUI({
     if (!is.null(values$selected_faculty)) {
       faculty <- values$selected_faculty
       
-      # Determine field names - prioritizing your field structure
-      name_field <- if ("fac_name" %in% names(faculty)) {
-        "fac_name"
-      } else if ("name" %in% names(faculty)) {
-        "name"
-      } else {
-        names(faculty)[1]
-      }
-      
-      dept_field <- if ("fac_div" %in% names(faculty)) {
-        "fac_div"
-      } else if ("department" %in% names(faculty)) {
-        "department"
-      } else {
-        NULL
-      }
-      
-      role_field <- if ("fac_fell" %in% names(faculty)) {
-        "fac_fell"
-      } else if ("role" %in% names(faculty)) {
-        "role"
-      } else {
-        NULL
-      }
+      name_field <- get_field_name(faculty, c("fac_name", "name", "faculty_name"))
+      dept_field <- get_field_name(faculty, c("fac_div", "department", "division"))
+      role_field <- get_field_name(faculty, c("fac_fell", "role", "position"))
       
       div(
         strong(faculty[[name_field]]),
@@ -212,8 +171,7 @@ server <- function(input, output, session) {
           paste("Role:", faculty[[role_field]])
         },
         br(), br(),
-        div(class = "faculty-selected",
-            "✅ Faculty selected successfully!")
+        div(class = "faculty-selected", "✅ Faculty selected successfully!")
       )
     } else {
       div("Select your name from the search results above.")
@@ -224,7 +182,6 @@ server <- function(input, output, session) {
   # RESIDENT SEARCH AND SELECTION
   # ============================================================================
   
-  # Resident search functionality
   filtered_residents <- reactive({
     req(input$resident_search)
     req(resident_data)
@@ -232,44 +189,35 @@ server <- function(input, output, session) {
     search_term <- tolower(trimws(input$resident_search))
     if (nchar(search_term) < 2) return(NULL)
     
-    # Search in name field
     filtered <- resident_data %>%
       filter(!is.na(name) & 
                grepl(search_term, tolower(name), fixed = TRUE)) %>%
-      arrange(Level, name) %>%  # Sort by level then name
-      head(15)  # Limit results
+      arrange(Level, name) %>%
+      head(15)
     
     cat("Resident search for '", search_term, "' returned ", nrow(filtered), " results\n")
-    
     return(filtered)
   })
   
-  # Render resident search results
   output$resident_search_results <- renderUI({
     resident_results <- filtered_residents()
     
     if (is.null(resident_results) || nrow(resident_results) == 0) {
-      if (!is.null(input$resident_search) && nchar(trimws(input$resident_search)) >= 2) {
-        return(div(style = "padding: 10px; color: #666;", 
-                   "No residents found. Please check spelling."))
+      message <- if (!is.null(input$resident_search) && nchar(trimws(input$resident_search)) >= 2) {
+        "No residents found. Please check spelling."
       } else {
-        return(div(style = "padding: 10px; color: #666;", 
-                   "Start typing to search for a resident..."))
+        "Start typing to search for a resident..."
       }
+      return(div(style = "padding: 10px; color: #666;", message))
     }
     
-    # Store search results
     values$current_resident_results <- resident_results
     
     result_list <- lapply(1:nrow(resident_results), function(i) {
       resident <- resident_results[i, ]
-      
       button_id <- paste0("select_resident_", i)
       
-      # Build display text
       resident_text <- paste0(resident$name, " (", resident$Level, ")")
-      
-      # Add graduation year if available
       if (!is.na(resident$grad_yr)) {
         resident_text <- paste0(resident_text, " - Class of ", resident$grad_yr)
       }
@@ -282,15 +230,7 @@ server <- function(input, output, session) {
       )
     })
     
-    # Add rotator option at the end
-    rotator_button <- div(class = "search-result rotator-result",
-                          actionButton("select_rotator", 
-                                       label = "🔄 Rotator (External Resident)",
-                                       style = "background: #e8f4fd; border: 1px solid #0066a1; text-align: left; width: 100%; padding: 10px; font-weight: 600;",
-                                       class = "btn btn-info")
-    )
-    
-    do.call(tagList, c(result_list, list(rotator_button)))
+    do.call(tagList, result_list)
   })
   
   # Handle resident selection clicks
@@ -307,11 +247,8 @@ server <- function(input, output, session) {
               values$selected_resident <- resident_results[resident_index, ]
               
               cat("Selected resident:", values$selected_resident$name, "\n")
-              
-              showNotification(
-                paste("Selected resident:", values$selected_resident$name), 
-                type = "default"
-              )
+              values$current_step <- "evaluation_type"
+              showNotification(paste("Selected resident:", values$selected_resident$name), type = "default")
             }
           })
         })
@@ -319,59 +256,31 @@ server <- function(input, output, session) {
     }
   })
   
-  # Handle rotator selection
-  observeEvent(input$select_rotator, {
-    # For now, create a placeholder rotator record
-    rotator_record <- data.frame(
-      record_id = "157",
-      name = "Rotator",
-      Level = "Rotator",
-      type = "Rotator",
-      grad_yr = NA,
-      stringsAsFactors = FALSE
-    )
-    
-    values$selected_resident <- rotator_record
-    
-    cat("Selected rotator\n")
-    
-    # Show modal or notification for rotator details (placeholder for future)
-    showNotification("Rotator selected. Additional rotator features coming soon.", 
-                     type = "message", duration = 3)
-  })
-  
-  # Display selected resident info
   output$selected_resident_info <- renderUI({
     if (!is.null(values$selected_resident)) {
       resident <- values$selected_resident
       
-      if (resident$record_id == "157") {
-        # Special display for rotator
+      if (resident$Level == "Rotator" || resident$type == "Rotator") {
         div(
-          strong("Rotator Selected"),
+          strong(resident$name),
           br(),
           "External/Visiting Resident",
+          br(),
+          if (!is.na(resident$grad_yr)) paste("Graduation Year:", resident$grad_yr),
           br(), br(),
-          div(class = "resident-selected",
-              "✅ Rotator selected!")
+          div(class = "resident-selected", "✅ Rotator selected!")
         )
       } else {
-        # Regular resident display
         div(
           strong(resident$name),
           br(),
           paste("Level:", resident$Level),
           br(),
-          if (!is.na(resident$grad_yr)) {
-            paste("Graduation Year:", resident$grad_yr)
-          },
+          if (!is.na(resident$grad_yr)) paste("Graduation Year:", resident$grad_yr),
           br(),
-          if (!is.na(resident$type)) {
-            paste("Program Type:", resident$type)
-          },
+          if (!is.na(resident$type)) paste("Program Type:", resident$type),
           br(), br(),
-          div(class = "resident-selected",
-              "✅ Resident selected successfully!")
+          div(class = "resident-selected", "✅ Resident selected successfully!")
         )
       }
     } else {
@@ -380,16 +289,304 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
+  # EVALUATION TYPE SELECTION
+  # ============================================================================
+  
+  output$evaluation_type_buttons <- renderUI({
+    req(values$selected_faculty)
+    req(values$selected_resident)
+    
+    # Check if helper functions exist
+    if (!exists("get_available_eval_types_by_division")) {
+      return(div(
+        class = "text-center",
+        style = "padding: 2rem;",
+        h5("Configuration Error", style = "color: #dc3545;"),
+        p("Evaluation configuration functions are not loaded. Please check your helper functions.")
+      ))
+    }
+    
+    # Get faculty division
+    faculty_div <- values$selected_faculty$fac_div %||% 
+      values$selected_faculty$department %||% 
+      values$selected_faculty$division %||% 
+      "15"  # Default to "Other"
+    
+    resident_level <- values$selected_resident$Level
+    
+    cat("=== EVALUATION TYPE SELECTION DEBUG ===\n")
+    cat("Faculty fields available:", paste(names(values$selected_faculty), collapse = ", "), "\n")
+    cat("Faculty division field value:", faculty_div, "\n")
+    cat("Resident level:", resident_level, "\n")
+    
+    tryCatch({
+      # Get available evaluation types
+      available_types <- get_available_eval_types_by_division(faculty_div)
+      filtered_types <- filter_eval_types_by_resident_level(available_types, resident_level)
+      
+      cat("Available eval types:", paste(available_types, collapse = ", "), "\n")
+      cat("Filtered eval types:", paste(filtered_types, collapse = ", "), "\n")
+      
+      if (length(filtered_types) == 0) {
+        return(div(
+          class = "text-center",
+          style = "padding: 2rem;",
+          h5("No evaluations available", style = "color: #666;"),
+          p("No evaluation types are configured for this faculty-resident combination.")
+        ))
+      }
+      
+      # Create buttons for each evaluation type
+      button_list <- lapply(filtered_types, function(eval_id) {
+        eval_info <- get_eval_type_display_info(eval_id, resident_level)
+        
+        if (is.null(eval_info)) return(NULL)
+        
+        is_appropriate <- is_eval_appropriate_for_level(eval_id, resident_level)
+        
+        button_class <- if (is_appropriate) {
+          "eval-type-button"
+        } else {
+          "eval-type-button disabled"
+        }
+        
+        # Create tags
+        tag_elements <- if (length(eval_info$tags) > 0) {
+          lapply(eval_info$tags, function(tag) {
+            tag_class <- if (tag %in% c("Intern Level", "Senior Level", "Longitudinal")) {
+              "eval-type-tag resident-level"
+            } else {
+              "eval-type-tag"
+            }
+            span(class = tag_class, tag)
+          })
+        } else {
+          list()
+        }
+        
+        div(
+          class = button_class,
+          onclick = if (is_appropriate) paste0("Shiny.setInputValue('select_eval_type', '", eval_id, "', {priority: 'event'});") else NULL,
+          div(class = "eval-type-icon", eval_info$icon),
+          div(class = "eval-type-title", eval_info$name),
+          div(class = "eval-type-description", eval_info$description),
+          if (length(tag_elements) > 0) {
+            div(class = "eval-type-tags", tag_elements)
+          }
+        )
+      })
+      
+      # Remove NULL elements
+      button_list <- button_list[!sapply(button_list, is.null)]
+      
+      if (length(button_list) == 0) {
+        return(div(
+          class = "text-center",
+          style = "padding: 2rem;",
+          h5("No evaluations available", style = "color: #666;"),
+          p("No appropriate evaluation types found for this combination.")
+        ))
+      }
+      
+      # Get faculty name for display
+      faculty_name <- values$selected_faculty$fac_name %||% 
+        values$selected_faculty$name %||% 
+        "Selected Faculty"
+      
+      tagList(
+        div(class = "eval-selection-info",
+            h5("Available Evaluations"),
+            p(paste("Based on", faculty_name, "'s specialty and", 
+                    values$selected_resident$name, "'s level, the following evaluations are available:"))
+        ),
+        div(class = "eval-type-container", button_list)
+      )
+      
+    }, error = function(e) {
+      cat("Error in evaluation type selection:", e$message, "\n")
+      return(div(
+        class = "text-center",
+        style = "padding: 2rem;",
+        h5("Error loading evaluations", style = "color: #dc3545;"),
+        p(paste("Error:", e$message))
+      ))
+    })
+  })
+  
+  # Handle evaluation type selection
+  observeEvent(input$select_eval_type, {
+    eval_type <- input$select_eval_type
+    
+    if (!is.null(eval_type) && eval_type != "") {
+      values$selected_eval_type <- eval_type
+      
+      if (exists("get_eval_type_display_info")) {
+        eval_info <- get_eval_type_display_info(eval_type)
+        if (!is.null(eval_info)) {
+          cat("Selected evaluation type:", eval_info$name, "\n")
+          showNotification(paste("Selected evaluation:", eval_info$name), type = "default")
+        }
+      }
+      
+      values$current_step <- "evaluation_form"
+    }
+  })
+  
+  # ============================================================================
+  # EVALUATION FORM
+  # ============================================================================
+  
+  output$evaluation_form_header <- renderUI({
+    req(values$selected_eval_type)
+    
+    if (exists("get_eval_type_display_info")) {
+      eval_info <- get_eval_type_display_info(values$selected_eval_type)
+      
+      if (!is.null(eval_info)) {
+        p(paste("Complete", eval_info$name, "evaluation"), style = "margin: 0; opacity: 0.9;")
+      } else {
+        p("Complete evaluation", style = "margin: 0; opacity: 0.9;")
+      }
+    } else {
+      p("Complete evaluation", style = "margin: 0; opacity: 0.9;")
+    }
+  })
+  
+  output$evaluation_form_content <- renderUI({
+    req(values$selected_eval_type)
+    
+    # Build form based on evaluation type
+    if (values$selected_eval_type == "day") {
+      if (exists("build_single_day_clinic_form")) {
+        build_single_day_clinic_form()
+      } else {
+        div(style = "text-align: center; padding: 2rem;",
+            h5("Form Builder Error", style = "color: #dc3545;"),
+            p("Single Day Clinic form builder function not found. Please check your form builder functions."))
+      }
+    } else {
+      # Placeholder for other evaluation types
+      eval_info <- NULL
+      if (exists("get_eval_type_display_info")) {
+        eval_info <- get_eval_type_display_info(values$selected_eval_type)
+      }
+      
+      faculty_name <- values$selected_faculty$fac_name %||% 
+        values$selected_faculty$name %||% 
+        "Unknown Faculty"
+      
+      div(style = "text-align: center; padding: 2rem;",
+          div(class = "eval-type-icon", style = "font-size: 4rem; margin-bottom: 1rem;", 
+              if (!is.null(eval_info)) eval_info$icon else "📝"),
+          h4(paste("Evaluation Form:", if (!is.null(eval_info)) eval_info$name else values$selected_eval_type)),
+          p("This evaluation form is not yet implemented."),
+          p(paste("Faculty:", faculty_name)),
+          p(paste("Resident:", values$selected_resident$name)),
+          p(paste("Level:", values$selected_resident$Level)),
+          br(),
+          div(
+            actionButton("back_to_eval_selection", "← Back to Evaluation Types", class = "btn btn-secondary me-2"),
+            actionButton("submit_evaluation", "Submit Evaluation", class = "btn btn-success"),
+            br(), br(),
+            actionButton("start_over", "Start Over", class = "btn btn-outline-secondary")
+          )
+      )
+    }
+  })
+  
+  observeEvent(input$back_to_eval_selection, {
+    values$current_step <- "evaluation_type"
+  })
+  
+  observeEvent(input$submit_evaluation, {
+    showNotification("Evaluation submission will be implemented with actual forms.", type = "message", duration = 3)
+  })
+  
+  # Handle single day clinic evaluation submission
+  observeEvent(input$submit_single_day_evaluation, {
+    cat("=== SINGLE DAY CLINIC EVALUATION SUBMISSION ===\n")
+    
+    if (!exists("validate_single_day_clinic_form")) {
+      showNotification("Validation function not found. Please check your form builder functions.", 
+                       type = "error", duration = 5)
+      return()
+    }
+    
+    missing_fields <- validate_single_day_clinic_form(input)
+    
+    if (length(missing_fields) > 0) {
+      cat("Validation failed. Missing fields:", paste(missing_fields, collapse = ", "), "\n")
+      showNotification(
+        paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
+        type = "error",
+        duration = 5
+      )
+      return()
+    }
+    
+    cat("Form validation passed\n")
+    
+    if (!exists("collect_single_day_clinic_data")) {
+      showNotification("Data collection function not found. Please check your form builder functions.", 
+                       type = "error", duration = 5)
+      return()
+    }
+    
+    eval_data <- collect_single_day_clinic_data(input, values$selected_faculty, values$selected_resident)
+    
+    cat("Evaluation data collected:\n")
+    print(eval_data)
+    
+    tryCatch({
+      if (!exists("submit_evaluation_data")) {
+        showNotification("Submission function not found. Please check your evaluation helper functions.", 
+                         type = "error", duration = 5)
+        return()
+      }
+      
+      result <- submit_evaluation_data(
+        eval_data = eval_data,
+        eval_type = "day",
+        resident_id = values$selected_resident$record_id,
+        token = if(exists("rdm_token")) rdm_token else NULL,
+        url = if(exists("url")) url else NULL
+      )
+      
+      cat("Submission successful:", result, "\n")
+      
+      showNotification(
+        "✅ Single Day Clinic evaluation submitted successfully!",
+        type = "default",
+        duration = 5
+      )
+      
+      # Reset to start
+      values$selected_faculty <- NULL
+      values$selected_resident <- NULL
+      values$selected_eval_type <- NULL
+      values$current_step <- "faculty"
+      
+      updateTextInput(session, "faculty_search", value = "")
+      updateTextInput(session, "resident_search", value = "")
+      
+    }, error = function(e) {
+      cat("Error submitting evaluation:", e$message, "\n")
+      showNotification(
+        paste("❌ Error submitting evaluation:", e$message),
+        type = "error",
+        duration = 8
+      )
+    })
+  })
+  
+  # ============================================================================
   # MODAL AND FACULTY ADDITION
   # ============================================================================
   
-  # Handle modal opening
   observeEvent(input$show_add_faculty_modal, {
-    # Reset validation warnings when modal opens
     session$sendCustomMessage("resetFacultyForm", list())
   })
   
-  # Reset form when modal opens (triggered by JavaScript)
   observeEvent(input$reset_faculty_form, {
     updateTextInput(session, "fac_name", value = "")
     updateTextInput(session, "fac_email", value = "")
@@ -400,25 +597,13 @@ server <- function(input, output, session) {
     updateCheckboxGroupInput(session, "fac_med_ed", selected = character(0))
   })
   
-  # Updated faculty submission with modal handling
   observeEvent(input$add_new_faculty, {
     cat("=== ADD NEW FACULTY BUTTON CLICKED ===\n")
     cat("Button clicked at:", Sys.time(), "\n")
     
-    # Check what inputs we received
-    cat("Input values:\n")
-    cat("fac_name:", if(is.null(input$fac_name)) "NULL" else paste0("'", input$fac_name, "'"), "\n")
-    cat("fac_email:", if(is.null(input$fac_email)) "NULL" else paste0("'", input$fac_email, "'"), "\n")
-    cat("fac_clin:", if(is.null(input$fac_clin)) "NULL" else paste0("'", input$fac_clin, "'"), "\n")
-    cat("fac_div:", if(is.null(input$fac_div)) "NULL" else paste0("'", input$fac_div, "'"), "\n")
-    cat("fac_fell:", if(is.null(input$fac_fell)) "NULL" else paste0("'", input$fac_fell, "'"), "\n")
-    cat("other_div:", if(is.null(input$other_div)) "NULL" else paste0("'", input$other_div, "'"), "\n")
-    cat("fac_med_ed:", if(is.null(input$fac_med_ed)) "NULL" else paste(input$fac_med_ed, collapse = ","), "\n")
-    
-    # Validation with detailed error messages
+    # Validation
     missing_fields <- character(0)
     
-    # Check required fields
     if (is.null(input$fac_name) || trimws(input$fac_name) == "") {
       missing_fields <- c(missing_fields, "Full Name")
     }
@@ -426,7 +611,6 @@ server <- function(input, output, session) {
     if (is.null(input$fac_email) || trimws(input$fac_email) == "") {
       missing_fields <- c(missing_fields, "Email Address")
     } else {
-      # Validate email format
       email_pattern <- "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
       if (!grepl(email_pattern, input$fac_email)) {
         missing_fields <- c(missing_fields, "Valid Email Address")
@@ -441,24 +625,20 @@ server <- function(input, output, session) {
       missing_fields <- c(missing_fields, "Faculty or Fellow")
     }
     
-    # If there are missing fields, show the warning
     if (length(missing_fields) > 0) {
       cat("VALIDATION FAILED - Missing fields:", paste(missing_fields, collapse = ", "), "\n")
       
-      # Create the missing fields list HTML
       missing_list_html <- paste0(
         "<ul style='margin: 0.5rem 0 0 1.5rem; list-style-type: disc;'>",
         paste0("<li>", missing_fields, "</li>", collapse = ""),
         "</ul>"
       )
       
-      # Show the warning div with JavaScript
       session$sendCustomMessage("showValidationWarning", list(
         show = TRUE,
         fields = missing_list_html
       ))
       
-      # Also show a notification
       showNotification(
         paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")), 
         type = "error",
@@ -467,12 +647,11 @@ server <- function(input, output, session) {
       return()
     }
     
-    # Hide the validation warning if validation passes
     session$sendCustomMessage("showValidationWarning", list(show = FALSE))
     
     cat("All required fields validated successfully\n")
     
-    # Check for preferred email domains (warning only, doesn't stop submission)
+    # Check for preferred email domains (warning only)
     if (!grepl("@ssmhealth\\.com|@va\\.gov", input$fac_email, ignore.case = TRUE)) {
       cat("WARNING: Non-preferred email domain\n")
       showNotification("Note: Consider using @ssmhealth.com or @va.gov email if available.", 
@@ -481,7 +660,6 @@ server <- function(input, output, session) {
     
     cat("Creating faculty data object...\n")
     
-    # Create new faculty record
     new_faculty_data <- list(
       fac_name = trimws(input$fac_name),
       fac_email = trimws(input$fac_email),
@@ -498,9 +676,12 @@ server <- function(input, output, session) {
       cat("Faculty data to submit:\n")
       print(new_faculty_data)
       
-      # Submit to REDCap faculty database
-      result <- submit_new_faculty_to_redcap(new_faculty_data, fac_token, url)
-      cat("Submission result:", result, "\n")
+      if (exists("submit_new_faculty_to_redcap") && exists("fac_token") && exists("url")) {
+        result <- submit_new_faculty_to_redcap(new_faculty_data, fac_token, url)
+        cat("Submission result:", result, "\n")
+      } else {
+        cat("Warning: REDCap submission function or credentials not found\n")
+      }
       
       showNotification(
         paste("✅ Welcome,", input$fac_name, "! Your profile has been added successfully."), 
@@ -512,43 +693,39 @@ server <- function(input, output, session) {
       temp_faculty <- data.frame(
         fac_name = input$fac_name,
         fac_email = input$fac_email,
-        fac_clin = case_when(
-          input$fac_clin == "1" ~ "SSM",
-          input$fac_clin == "2" ~ "VA", 
-          input$fac_clin == "3" ~ "Other",
-          TRUE ~ input$fac_clin
-        ),
-        fac_div = if (input$fac_div == "15") input$other_div else {
-          case_when(
-            input$fac_div == "1" ~ "Addiction Medicine",
-            input$fac_div == "2" ~ "Allergy",
-            input$fac_div == "3" ~ "Cardiology",
-            input$fac_div == "4" ~ "Endocrinology",
-            input$fac_div == "5" ~ "Gastroenterology",
-            input$fac_div == "6" ~ "Geriatrics",
-            input$fac_div == "7" ~ "GIM - Hospitalist",
-            input$fac_div == "8" ~ "GIM - Primary Care",
-            input$fac_div == "9" ~ "Hematology / Oncology",
-            input$fac_div == "10" ~ "Infectious Disease",
-            input$fac_div == "11" ~ "Nephrology",
-            input$fac_div == "12" ~ "Palliative Care",
-            input$fac_div == "13" ~ "Pulmonary / Critical Care",
-            input$fac_div == "14" ~ "Rheumatology",
-            TRUE ~ "Other"
-          )
-        },
-        fac_fell = case_when(
-          input$fac_fell == "1" ~ "Faculty",
-          input$fac_fell == "2" ~ "Fellow",
-          TRUE ~ input$fac_fell
-        ),
+        fac_clin = switch(input$fac_clin,
+                          "1" = "SSM",
+                          "2" = "VA", 
+                          "3" = "Other",
+                          input$fac_clin),
+        fac_div = switch(input$fac_div,
+                         "1" = "Addiction Medicine",
+                         "2" = "Allergy",
+                         "3" = "Cardiology",
+                         "4" = "Endocrinology",
+                         "5" = "Gastroenterology",
+                         "6" = "Geriatrics",
+                         "7" = "GIM - Hospitalist",
+                         "8" = "GIM - Primary Care",
+                         "9" = "Hematology / Oncology",
+                         "10" = "Infectious Disease",
+                         "11" = "Nephrology",
+                         "12" = "Palliative Care",
+                         "13" = "Pulmonary / Critical Care",
+                         "14" = "Rheumatology",
+                         "15" = if (!is.null(input$other_div) && input$other_div != "") input$other_div else "Other",
+                         "Other"),
+        fac_fell = switch(input$fac_fell,
+                          "1" = "Faculty",
+                          "2" = "Fellow",
+                          input$fac_fell),
         status = "active",
         stringsAsFactors = FALSE
       )
       
       values$selected_faculty <- temp_faculty
+      values$current_step <- "resident"
       
-      # Close the modal and reset form
       session$sendCustomMessage("closeFacultyModal", list())
       
       # Reset form inputs
@@ -566,20 +743,7 @@ server <- function(input, output, session) {
                        type = "error", duration = 8)
     })
   })
-  
-  # ============================================================================
-  # NAVIGATION
-  # ============================================================================
-  
-  # Start over button
-  observeEvent(input$start_over, {
-    values$selected_faculty <- NULL
-    values$selected_resident <- NULL
-    values$current_search_results <- NULL
-    values$current_resident_results <- NULL
-    
-    # Clear inputs
-    updateTextInput(session, "faculty_search", value = "")
-    updateTextInput(session, "resident_search", value = "")
-  })
 }
+
+
+

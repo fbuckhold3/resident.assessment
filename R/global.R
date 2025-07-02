@@ -1,4 +1,4 @@
-# global.R - Faculty Evaluation App (Clean Version)
+# global.R - Faculty Evaluation App (Updated with Evaluation Helpers)
 
 # ============================================================================
 # LIBRARIES
@@ -33,6 +33,8 @@ url <- "https://redcapsurvey.slu.edu/api/"
 
 # Source helper functions
 source("R/helpers.R")
+source("R/evaluation_helpers.R")  # Add evaluation helper functions
+source("R/evaluation_form_builder.R")  # Add evaluation form builder functions
 
 # ============================================================================
 # DATA FUNCTIONS
@@ -176,12 +178,48 @@ get_resident_data <- function() {
   })
 }
 
+# Function to get evaluation data dictionary
+get_evaluation_dictionary <- function() {
+  tryCatch({
+    cat("Pulling evaluation data dictionary...\n")
+    
+    formData <- list(
+      "token" = rdm_token,
+      content = 'metadata',
+      format = 'json',
+      returnFormat = 'json'
+    )
+    
+    response <- httr::POST(url, body = formData, encode = "form")
+    
+    if (httr::status_code(response) != 200) {
+      stop("Dictionary REDCap API call failed with status: ", httr::status_code(response))
+    }
+    
+    response_text <- httr::content(response, "text", encoding = "UTF-8")
+    dict_data <- jsonlite::fromJSON(response_text)
+    
+    cat("Evaluation dictionary loaded. Total fields:", nrow(dict_data), "\n")
+    
+    # Filter for assessment fields only
+    assessment_fields <- dict_data[dict_data$form_name == "assessment", ]
+    cat("Assessment fields found:", nrow(assessment_fields), "\n")
+    
+    return(dict_data)  # Return full dictionary, filtering will be done in functions
+    
+  }, error = function(e) {
+    cat("Error in Dictionary API pull:", e$message, "\n")
+    return(NULL)
+  })
+}
+
 # ============================================================================
 # DATA LOADING
 # ============================================================================
 
 faculty_data <- get_faculty_data()
 resident_data <- get_resident_data()
+rdm_dict <- get_evaluation_dictionary()  # Changed from evaluation_dict to rdm_dict
 
 # Debug output
 if (!is.null(faculty_data)) {
@@ -193,5 +231,18 @@ if (!is.null(resident_data)) {
   if ("Level" %in% names(resident_data)) {
     cat("Level distribution:\n")
     print(table(resident_data$Level, useNA = "always"))
+  }
+}
+
+if (!is.null(rdm_dict)) {
+  cat("Evaluation dictionary loaded successfully\n")
+  
+  # Show breakdown by evaluation type for assessment form
+  assessment_fields <- rdm_dict[rdm_dict$form_name == "assessment", ]
+  if (nrow(assessment_fields) > 0) {
+    # Extract evaluation types from field names
+    eval_types <- unique(sub("^ass_([^_]+)_.*", "\\1", assessment_fields$field_name))
+    eval_types <- eval_types[eval_types != assessment_fields$field_name]  # Remove non-matching
+    cat("Assessment evaluation types found:", paste(eval_types, collapse = ", "), "\n")
   }
 }

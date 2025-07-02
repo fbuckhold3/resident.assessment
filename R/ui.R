@@ -1,4 +1,4 @@
-# ui.R - Faculty Evaluation App (Updated with Resident Selection)
+# ui.R - Faculty Evaluation App (Updated with Evaluation Type Selection)
 
 ui <- page_fluid(
   theme = bs_theme(bootswatch = "flatly", version = 5),  # Bootstrap 5 for modal support
@@ -23,51 +23,54 @@ ui <- page_fluid(
   
   div(class = "container",
       
-      # Faculty Search/Login Step
-      div(class = "ssm-card",
-          div(class = "step-header",
-              h3("Step 1: Faculty Login"),
-              p("Search for your name to begin evaluating residents", style = "margin: 0; opacity: 0.9;")
-          ),
-          div(style = "padding: 2rem 0;",
-              fluidRow(
-                column(8,
-                       div(class = "mb-3",
-                           h5("Search for Your Name", class = "question-text"),
-                           textInput("faculty_search", 
-                                     "", 
-                                     placeholder = "Start typing your name...")
-                       ),
-                       div(id = "faculty_search_results",
-                           uiOutput("faculty_search_results")
-                       )
-                ),
-                column(4,
-                       div(class = "faculty-card",
-                           h5("Selected Faculty", class = "question-text"),
-                           uiOutput("selected_faculty_info")
-                       )
+      # Step 1: Faculty Search/Login 
+      conditionalPanel(
+        condition = "output.current_step == 'faculty'",
+        div(class = "ssm-card",
+            div(class = "step-header",
+                h3("Step 1: Faculty Login"),
+                p("Search for your name to begin evaluating residents", style = "margin: 0; opacity: 0.9;")
+            ),
+            div(style = "padding: 2rem 0;",
+                fluidRow(
+                  column(8,
+                         div(class = "mb-3",
+                             h5("Search for Your Name", class = "question-text"),
+                             textInput("faculty_search", 
+                                       "", 
+                                       placeholder = "Start typing your name...")
+                         ),
+                         div(id = "faculty_search_results",
+                             uiOutput("faculty_search_results")
+                         )
+                  ),
+                  column(4,
+                         div(class = "faculty-card",
+                             h5("Selected Faculty", class = "question-text"),
+                             uiOutput("selected_faculty_info")
+                         )
+                  )
                 )
-              )
-          ),
-          
-          # Add Faculty button
-          div(class = "text-center mt-4",
-              div(class = "add-faculty-prompt",
-                  p("Can't find your name?", 
-                    style = "margin-bottom: 0.5rem; color: var(--ssm-text-secondary); font-size: 0.95rem;"),
-                  actionButton("show_add_faculty_modal", 
-                               "Add Yourself to Database", 
-                               class = "btn btn-outline-primary add-faculty-btn",
-                               `data-bs-toggle` = "modal",
-                               `data-bs-target` = "#addFacultyModal")
-              )
-          )
+            ),
+            
+            # Add Faculty button
+            div(class = "text-center mt-4",
+                div(class = "add-faculty-prompt",
+                    p("Can't find your name?", 
+                      style = "margin-bottom: 0.5rem; color: var(--ssm-text-secondary); font-size: 0.95rem;"),
+                    actionButton("show_add_faculty_modal", 
+                                 "Add Yourself to Database", 
+                                 class = "btn btn-outline-primary add-faculty-btn",
+                                 `data-bs-toggle` = "modal",
+                                 `data-bs-target` = "#addFacultyModal")
+                )
+            )
+        )
       ),
       
-      # Resident Selection Step
+      # Step 2: Resident Selection
       conditionalPanel(
-        condition = "output.show_next_steps",
+        condition = "output.current_step == 'resident'",
         div(class = "ssm-card",
             div(class = "step-header",
                 h3("Step 2: Select Resident"),
@@ -93,24 +96,44 @@ ui <- page_fluid(
                          )
                   )
                 )
+            ),
+            
+            # Navigation
+            div(class = "text-center mt-4",
+                actionButton("back_to_faculty", "← Back to Faculty Selection", class = "btn btn-secondary")
             )
         )
       ),
       
-      # Evaluation Form Step (Placeholder)
+      # Step 3: Evaluation Type Selection
       conditionalPanel(
-        condition = "output.show_evaluation_step",
+        condition = "output.current_step == 'evaluation_type'",
         div(class = "ssm-card",
             div(class = "step-header",
-                h3("Step 3: Faculty Evaluation"),
-                p("Evaluate the selected resident", style = "margin: 0; opacity: 0.9;")
+                h3("Step 3: Select Evaluation Type"),
+                p("Choose the type of evaluation to complete", style = "margin: 0; opacity: 0.9;")
             ),
-            div(style = "padding: 2rem; text-align: center;",
-                h4("Evaluation Form Coming Next!", style = "color: var(--ssm-success-green);"),
-                p("Both faculty and resident have been selected successfully."),
-                p("The evaluation form will be built in the next iteration."),
-                br(),
-                actionButton("start_over", "Start Over", class = "btn btn-secondary")
+            div(style = "padding: 2rem;",
+                uiOutput("evaluation_type_buttons")
+            ),
+            
+            # Navigation
+            div(class = "text-center mt-4",
+                actionButton("back_to_resident", "← Back to Resident Selection", class = "btn btn-secondary")
+            )
+        )
+      ),
+      
+      # Step 4: Evaluation Form
+      conditionalPanel(
+        condition = "output.current_step == 'evaluation_form'",
+        div(class = "ssm-card",
+            div(class = "step-header",
+                h3("Step 4: Complete Evaluation"),
+                uiOutput("evaluation_form_header")
+            ),
+            div(style = "padding: 2rem;",
+                uiOutput("evaluation_form_content")
             )
         )
       ),
