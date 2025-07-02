@@ -299,14 +299,16 @@ get_next_eval_instance <- function(resident_id, eval_type, token, url) {
   })
 }
 
+
 submit_evaluation_data <- function(eval_data, eval_type, resident_id, token, url) {
   tryCatch({
     cat("=== SUBMITTING EVALUATION DATA TO ASSESSMENT FORM ===\n")
     cat("Evaluation type:", eval_type, "\n")
     cat("Resident ID:", resident_id, "\n")
     
-    # Get next instance for assessment form
-    next_instance <- 1  # Simple for now
+    # Get next instance for assessment form - THIS WAS THE BUG!
+    next_instance <- get_next_assessment_instance(resident_id, token, url)
+    cat("Using assessment instance:", next_instance, "\n")
     
     # Prepare REDCap data for ASSESSMENT FORM (where all eval fields exist)
     redcap_data <- data.frame(
@@ -353,5 +355,79 @@ submit_evaluation_data <- function(eval_data, eval_type, resident_id, token, url
   }, error = function(e) {
     cat("❌ Error submitting evaluation:", e$message, "\n")
     stop("Evaluation submission failed: ", e$message)
+  })
+}
+
+# NEW FUNCTION: Get next instance for assessment form specifically
+get_next_assessment_instance <- function(resident_id, token, url) {
+  tryCatch({
+    cat("=== GETTING NEXT ASSESSMENT INSTANCE FOR RESIDENT:", resident_id, "===\n")
+    
+    # Query for specific record with only needed fields
+    response <- httr::POST(
+      url = url,
+      body = list(
+        token = token,
+        content = "record",
+        action = "export",
+        format = "json",
+        type = "flat",
+        records = resident_id,
+        fieldNames = "record_id,redcap_repeat_instrument,redcap_repeat_instance",
+        rawOrLabel = "raw",
+        rawOrLabelHeaders = "raw",
+        exportCheckboxLabel = "false",
+        exportSurveyFields = "false",
+        exportDataAccessGroups = "false",
+        returnFormat = "json"
+      ),
+      encode = "form"
+    )
+    
+    cat("REDCap query response status:", httr::status_code(response), "\n")
+    
+    if (httr::status_code(response) == 200) {
+      response_text <- httr::content(response, "text", encoding = "UTF-8")
+      all_data <- jsonlite::fromJSON(response_text)
+      
+      if (is.data.frame(all_data) && nrow(all_data) > 0) {
+        # Filter for assessment instrument instances
+        assessment_instances <- all_data[
+          !is.na(all_data$redcap_repeat_instrument) & 
+            all_data$redcap_repeat_instrument == "assessment", 
+        ]
+        
+        cat("Assessment instances found:", nrow(assessment_instances), "\n")
+        
+        if (nrow(assessment_instances) > 0) {
+          # Get all instance numbers
+          instances <- as.numeric(assessment_instances$redcap_repeat_instance)
+          instances <- instances[!is.na(instances)]
+          
+          if (length(instances) > 0) {
+            instances <- sort(instances)
+            max_instance <- max(instances)
+            next_instance <- max_instance + 1
+            
+            cat("✅ Found existing assessment instances:", paste(instances, collapse = ", "), "\n")
+            cat("✅ Max instance:", max_instance, "Next instance:", next_instance, "\n")
+            
+            return(next_instance)
+          }
+        }
+      }
+    } else {
+      cat("❌ REDCap query failed with status:", httr::status_code(response), "\n")
+      error_text <- httr::content(response, "text", encoding = "UTF-8")
+      cat("Error details:", error_text, "\n")
+    }
+    
+    # Fallback to instance 1 if no existing instances found
+    cat("⚠️ No existing assessment instances found, starting with instance 1\n")
+    return(1)
+    
+  }, error = function(e) {
+    cat("❌ Error in get_next_assessment_instance:", e$message, "\n")
+    return(1)
   })
 }

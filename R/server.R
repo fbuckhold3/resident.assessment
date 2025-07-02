@@ -1,7 +1,6 @@
-# server.R - Faculty Evaluation App (Cleaned Version)
+# server.R - Faculty Evaluation App (Updated with All Evaluation Types)
 
 server <- function(input, output, session) {
-  
   
   # Reactive values to track app state
   values <- reactiveValues(
@@ -13,7 +12,15 @@ server <- function(input, output, session) {
     current_step = "intro"  # Start with intro page
   )
   
-  # ... existing helper function ...
+  # Helper function to get field name safely
+  get_field_name <- function(data, preferred_fields) {
+    for (field in preferred_fields) {
+      if (field %in% names(data)) {
+        return(field)
+      }
+    }
+    return(names(data)[1])  # fallback
+  }
   
   # Manage current step display
   output$current_step <- reactive({
@@ -31,7 +38,7 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # NAVIGATION BETWEEN STEPS (updated to include intro)
+  # NAVIGATION BETWEEN STEPS
   # ============================================================================
   
   observeEvent(input$back_to_faculty, {
@@ -58,48 +65,8 @@ server <- function(input, output, session) {
     updateTextInput(session, "resident_search", value = "")
   })
   
-  # Helper function to get field name safely
-  get_field_name <- function(data, preferred_fields) {
-    for (field in preferred_fields) {
-      if (field %in% names(data)) {
-        return(field)
-      }
-    }
-    return(names(data)[1])  # fallback
-  }
-  
-  # Manage current step display
-  output$current_step <- reactive({
-    values$current_step
-  })
-  outputOptions(output, "current_step", suspendWhenHidden = FALSE)
-  
-  # ============================================================================
-  # NAVIGATION BETWEEN STEPS
-  # ============================================================================
-  
-  observeEvent(input$back_to_faculty, {
-    values$current_step <- "faculty"
-    values$selected_resident <- NULL
-    values$selected_eval_type <- NULL
-    updateTextInput(session, "resident_search", value = "")
-  })
-  
-  observeEvent(input$back_to_resident, {
-    values$current_step <- "resident"
-    values$selected_eval_type <- NULL
-  })
-  
-  observeEvent(input$start_over, {
-    values$selected_faculty <- NULL
-    values$selected_resident <- NULL
-    values$selected_eval_type <- NULL
-    values$current_search_results <- NULL
-    values$current_resident_results <- NULL
-    values$current_step <- "faculty"
-    
-    updateTextInput(session, "faculty_search", value = "")
-    updateTextInput(session, "resident_search", value = "")
+  observeEvent(input$back_to_eval_selection, {
+    values$current_step <- "evaluation_type"
   })
   
   # ============================================================================
@@ -502,55 +469,288 @@ server <- function(input, output, session) {
     req(values$selected_eval_type)
     
     # Build form based on evaluation type
-    if (values$selected_eval_type == "day") {
-      if (exists("build_single_day_clinic_form")) {
-        build_single_day_clinic_form()
-      } else {
-        div(style = "text-align: center; padding: 2rem;",
-            h5("Form Builder Error", style = "color: #dc3545;"),
-            p("Single Day Clinic form builder function not found. Please check your form builder functions."))
-      }
-    } else {
-      # Placeholder for other evaluation types
-      eval_info <- NULL
-      if (exists("get_eval_type_display_info")) {
-        eval_info <- get_eval_type_display_info(values$selected_eval_type)
-      }
-      
-      faculty_name <- values$selected_faculty$fac_name %||% 
-        values$selected_faculty$name %||% 
-        "Unknown Faculty"
-      
-      div(style = "text-align: center; padding: 2rem;",
-          div(class = "eval-type-icon", style = "font-size: 4rem; margin-bottom: 1rem;", 
-              if (!is.null(eval_info)) eval_info$icon else "📝"),
-          h4(paste("Evaluation Form:", if (!is.null(eval_info)) eval_info$name else values$selected_eval_type)),
-          p("This evaluation form is not yet implemented."),
-          p(paste("Faculty:", faculty_name)),
-          p(paste("Resident:", values$selected_resident$name)),
-          p(paste("Level:", values$selected_resident$Level)),
-          br(),
-          div(
-            actionButton("back_to_eval_selection", "← Back to Evaluation Types", class = "btn btn-secondary me-2"),
-            actionButton("submit_evaluation", "Submit Evaluation", class = "btn btn-success"),
-            br(), br(),
-            actionButton("start_over", "Start Over", class = "btn btn-outline-secondary")
-          )
-      )
+    form_content <- switch(values$selected_eval_type,
+                           "day" = {
+                             if (exists("build_single_day_clinic_form")) {
+                               build_single_day_clinic_form()
+                             } else {
+                               build_form_error("Single Day Clinic form builder function not found.")
+                             }
+                           },
+                           "cons" = {
+                             if (exists("build_consultation_form")) {
+                               build_consultation_form()
+                             } else {
+                               build_form_error("Consultation form builder function not found.")
+                             }
+                           },
+                           "bridge" = {
+                             if (exists("build_bridge_clinic_form")) {
+                               build_bridge_clinic_form()
+                             } else {
+                               build_form_error("Bridge Clinic form builder function not found.")
+                             }
+                           },
+                           "int_ip" = {
+                             if (exists("build_intern_inpatient_form")) {
+                               build_intern_inpatient_form()
+                             } else {
+                               build_form_error("Intern Inpatient form builder function not found.")
+                             }
+                           },
+                           "res_ip" = {
+                             if (exists("build_senior_inpatient_form")) {
+                               build_senior_inpatient_form()
+                             } else {
+                               build_form_error("Senior Inpatient form builder function not found.")
+                             }
+                           },
+                           "cc" = {
+                             if (exists("build_continuity_clinic_form")) {
+                               # Send resident level to JavaScript
+                               session$sendCustomMessage("setResidentLevel", values$selected_resident$Level)
+                               build_continuity_clinic_form()
+                             } else {
+                               build_form_error("Continuity Clinic form builder function not found.")
+                             }
+                           },
+                           {
+                             # Default case for unimplemented evaluation types
+                             eval_info <- NULL
+                             if (exists("get_eval_type_display_info")) {
+                               eval_info <- get_eval_type_display_info(values$selected_eval_type)
+                             }
+                             
+                             faculty_name <- values$selected_faculty$fac_name %||% 
+                               values$selected_faculty$name %||% 
+                               "Unknown Faculty"
+                             
+                             div(style = "text-align: center; padding: 2rem;",
+                                 div(class = "eval-type-icon", style = "font-size: 4rem; margin-bottom: 1rem;", 
+                                     if (!is.null(eval_info)) eval_info$icon else "📝"),
+                                 h4(paste("Evaluation Form:", if (!is.null(eval_info)) eval_info$name else values$selected_eval_type)),
+                                 p("This evaluation form is not yet implemented."),
+                                 p(paste("Faculty:", faculty_name)),
+                                 p(paste("Resident:", values$selected_resident$name)),
+                                 p(paste("Level:", values$selected_resident$Level)),
+                                 br(),
+                                 div(
+                                   actionButton("back_to_eval_selection", "← Back to Evaluation Types", class = "btn btn-secondary me-2"),
+                                   actionButton("submit_evaluation", "Submit Evaluation", class = "btn btn-success"),
+                                   br(), br(),
+                                   actionButton("start_over", "Start Over", class = "btn btn-outline-secondary")
+                                 )
+                             )
+                           }
+    )
+    
+    return(form_content)
+  })
+  
+  # Render the quarter dropdown dynamically
+  output$quarter_dropdown <- renderUI({
+    if (!exists("rdm_dict") || is.null(rdm_dict)) {
+      return(div("Data dictionary not available"))
     }
+    
+    # Get quarter field from data dictionary
+    quarter_field <- rdm_dict %>%
+      filter(form_name == "assessment") %>%
+      filter(field_name == "ass_cc_quart") %>%
+      slice(1)
+    
+    if (nrow(quarter_field) == 0) {
+      return(div("Quarter field not found in data dictionary"))
+    }
+    
+    # Parse choices from data dictionary
+    choices_text <- quarter_field$select_choices_or_calculations
+    choices_list <- strsplit(choices_text, " \\| ")[[1]]
+    choices <- list("Choose quarter/evaluation type..." = "")
+    
+    for (choice in choices_list) {
+      parts <- strsplit(choice, ", ", fixed = TRUE)[[1]]
+      if (length(parts) >= 2) {
+        value <- trimws(parts[1])
+        label <- trimws(paste(parts[2:length(parts)], collapse = ", "))
+        choices[[label]] <- value
+      }
+    }
+    
+    div(class = "eval-field-group",
+        tags$label(quarter_field$field_label, class = "eval-field-label required"),
+        selectInput(
+          "ass_cc_quart",
+          label = NULL,
+          choices = choices,
+          selected = "",
+          width = "100%"
+        )
+    )
   })
   
-  observeEvent(input$back_to_eval_selection, {
-    values$current_step <- "evaluation_type"
+  # Render assessment subtitle based on quarter and level
+  output$cc_assessment_subtitle <- renderText({
+    req(input$ass_cc_quart)
+    req(values$selected_resident)
+    
+    quarter_desc <- get_quarter_description(input$ass_cc_quart, values$selected_resident$Level)
+    paste("Rate the resident's performance in:", quarter_desc)
   })
   
-  observeEvent(input$submit_evaluation, {
-    showNotification("Evaluation submission will be implemented with actual forms.", type = "message", duration = 3)
+  # Render dynamic questions based on quarter and resident level
+  output$cc_dynamic_questions <- renderUI({
+    req(input$ass_cc_quart)
+    req(values$selected_resident)
+    
+    if (!exists("rdm_dict") || is.null(rdm_dict)) {
+      return(div("Data dictionary not available"))
+    }
+    
+    # Get field names for this quarter and level
+    field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, values$selected_resident$Level)
+    
+    if (length(field_names) == 0) {
+      return(div(
+        class = "text-center",
+        style = "padding: 2rem;",
+        h5("No Questions Available", style = "color: #666;"),
+        p("No evaluation questions found for this quarter and resident level combination.")
+      ))
+    }
+    
+    cat("Building CC questions for quarter", input$ass_cc_quart, "level", values$selected_resident$Level, "\n")
+    cat("Field names:", paste(field_names, collapse = ", "), "\n")
+    
+    # Get field information from data dictionary
+    cc_fields <- rdm_dict %>%
+      filter(form_name == "assessment") %>%
+      filter(field_name %in% field_names) %>%
+      arrange(match(field_name, field_names))  # Maintain order
+    
+    if (nrow(cc_fields) == 0) {
+      return(div(
+        class = "text-center",
+        style = "padding: 2rem;",
+        h5("Configuration Error", style = "color: #dc3545;"),
+        p("Continuity clinic fields not found in data dictionary.")
+      ))
+    }
+    
+    cat("Found", nrow(cc_fields), "fields in data dictionary\n")
+    
+    # Build form fields dynamically
+    assessment_fields <- lapply(1:nrow(cc_fields), function(i) {
+      field_row <- cc_fields[i, ]
+      cat("Building CC field", i, ":", field_row$field_name, "\n")
+      build_field_from_dict(field_row, required = TRUE)
+    })
+    
+    return(assessment_fields)
   })
   
-  # Handle single day clinic evaluation submission
-  observeEvent(input$submit_single_day_evaluation, {
-    cat("=== SINGLE DAY CLINIC EVALUATION SUBMISSION ===\n")
+  # Handle quarter selection change (reactive to update questions)
+  observeEvent(input$cc_quarter_selected, {
+    cat("Quarter selected:", input$cc_quarter_selected, "\n")
+    # The dynamic questions will automatically update via the reactive output above
+  })
+  
+  # Handle continuity clinic submission
+  observeEvent(input$submit_continuity_clinic_evaluation, {
+    cat("=== SUBMITTING CONTINUITY CLINIC EVALUATION ===\n")
+    
+    if (!exists("validate_continuity_clinic_with_level")) {
+      showNotification("Validation function not found. Please check your form builder functions.", 
+                       type = "error", duration = 5)
+      return()
+    }
+    
+    missing_fields <- validate_continuity_clinic_with_level(input, values$selected_resident$Level)
+    
+    if (length(missing_fields) > 0) {
+      cat("Validation failed. Missing fields:", paste(missing_fields, collapse = ", "), "\n")
+      showNotification(
+        paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
+        type = "error",
+        duration = 5
+      )
+      return()
+    }
+    
+    cat("Form validation passed\n")
+    
+    if (!exists("collect_continuity_clinic_data")) {
+      showNotification("Data collection function not found. Please check your form builder functions.", 
+                       type = "error", duration = 5)
+      return()
+    }
+    
+    eval_data <- collect_continuity_clinic_data(input, values$selected_faculty, values$selected_resident)
+    
+    cat("Continuity clinic evaluation data collected:\n")
+    print(eval_data)
+    
+    tryCatch({
+      if (!exists("submit_evaluation_data")) {
+        showNotification("Submission function not found. Please check your evaluation helper functions.", 
+                         type = "error", duration = 5)
+        return()
+      }
+      
+      result <- submit_evaluation_data(
+        eval_data = eval_data,
+        eval_type = "cc",
+        resident_id = values$selected_resident$record_id,
+        token = if(exists("rdm_token")) rdm_token else NULL,
+        url = if(exists("url")) url else NULL
+      )
+      
+      cat("Submission successful:", result, "\n")
+      
+      # Get quarter description for notification
+      quarter_desc <- get_quarter_description(input$ass_cc_quart, values$selected_resident$Level)
+      
+      showNotification(
+        paste0("✅ Continuity Clinic evaluation submitted successfully! (", quarter_desc, ")"),
+        type = "default",
+        duration = 5
+      )
+      
+      # Reset to start
+      values$selected_faculty <- NULL
+      values$selected_resident <- NULL
+      values$selected_eval_type <- NULL
+      values$current_step <- "faculty"
+      
+      updateTextInput(session, "faculty_search", value = "")
+      updateTextInput(session, "resident_search", value = "")
+      
+    }, error = function(e) {
+      cat("Error submitting continuity clinic evaluation:", e$message, "\n")
+      showNotification(
+        paste("❌ Error submitting evaluation:", e$message),
+        type = "error",
+        duration = 8
+      )
+    })
+  })
+  
+  # Helper function to build error messages
+  build_form_error <- function(message) {
+    div(style = "text-align: center; padding: 2rem;",
+        h5("Form Builder Error", style = "color: #dc3545;"),
+        p(message),
+        br(),
+        actionButton("back_to_eval_selection", "← Back to Evaluation Types", class = "btn btn-secondary"))
+  }
+  
+  # ============================================================================
+  # EVALUATION SUBMISSION HANDLERS
+  # ============================================================================
+  
+  # Generic submission handler function
+  handle_evaluation_submission <- function(eval_type, validate_func, collect_func) {
+    cat("=== SUBMITTING", toupper(eval_type), "EVALUATION ===\n")
     
     if (!exists("validate_single_day_clinic_form")) {
       showNotification("Validation function not found. Please check your form builder functions.", 
@@ -558,7 +758,7 @@ server <- function(input, output, session) {
       return()
     }
     
-    missing_fields <- validate_single_day_clinic_form(input)
+    missing_fields <- validate_func(input)
     
     if (length(missing_fields) > 0) {
       cat("Validation failed. Missing fields:", paste(missing_fields, collapse = ", "), "\n")
@@ -578,7 +778,7 @@ server <- function(input, output, session) {
       return()
     }
     
-    eval_data <- collect_single_day_clinic_data(input, values$selected_faculty, values$selected_resident)
+    eval_data <- collect_func(input, values$selected_faculty, values$selected_resident)
     
     cat("Evaluation data collected:\n")
     print(eval_data)
@@ -592,7 +792,7 @@ server <- function(input, output, session) {
       
       result <- submit_evaluation_data(
         eval_data = eval_data,
-        eval_type = "day",
+        eval_type = eval_type,
         resident_id = values$selected_resident$record_id,
         token = if(exists("rdm_token")) rdm_token else NULL,
         url = if(exists("url")) url else NULL
@@ -600,8 +800,17 @@ server <- function(input, output, session) {
       
       cat("Submission successful:", result, "\n")
       
+      eval_name <- switch(eval_type,
+                          "day" = "Single Day Clinic",
+                          "cons" = "Consultation", 
+                          "bridge" = "Bridge Clinic",
+                          "int_ip" = "Intern Inpatient",
+                          "res_ip" = "Senior Inpatient",
+                          eval_type
+      )
+      
       showNotification(
-        "✅ Single Day Clinic evaluation submitted successfully!",
+        paste0("✅ ", eval_name, " evaluation submitted successfully!"),
         type = "default",
         duration = 5
       )
@@ -623,6 +832,32 @@ server <- function(input, output, session) {
         duration = 8
       )
     })
+  }
+  
+  # Individual submission handlers
+  observeEvent(input$submit_single_day_evaluation, {
+    handle_evaluation_submission("day", validate_single_day_clinic_form, collect_single_day_clinic_data)
+  })
+  
+  observeEvent(input$submit_consultation_evaluation, {
+    handle_evaluation_submission("cons", validate_consultation_form, collect_consultation_data)
+  })
+  
+  observeEvent(input$submit_bridge_evaluation, {
+    handle_evaluation_submission("bridge", validate_bridge_clinic_form, collect_bridge_clinic_data)
+  })
+  
+  observeEvent(input$submit_intern_inpatient_evaluation, {
+    handle_evaluation_submission("int_ip", validate_intern_inpatient_form, collect_intern_inpatient_data)
+  })
+  
+  observeEvent(input$submit_senior_inpatient_evaluation, {
+    handle_evaluation_submission("res_ip", validate_senior_inpatient_form, collect_senior_inpatient_data)
+  })
+  
+  # Generic submission for unimplemented forms
+  observeEvent(input$submit_evaluation, {
+    showNotification("Evaluation submission will be implemented with actual forms.", type = "message", duration = 3)
   })
   
   # ============================================================================
@@ -790,6 +1025,3 @@ server <- function(input, output, session) {
     })
   })
 }
-
-
-
