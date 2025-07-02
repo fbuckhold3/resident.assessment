@@ -549,6 +549,8 @@ server <- function(input, output, session) {
   
   # Render the quarter dropdown dynamically
   output$quarter_dropdown <- renderUI({
+    cat("=== RENDERING QUARTER DROPDOWN (REAL DATA) ===\n")
+    
     if (!exists("rdm_dict") || is.null(rdm_dict)) {
       return(div("Data dictionary not available"))
     }
@@ -577,15 +579,40 @@ server <- function(input, output, session) {
       }
     }
     
-    div(class = "eval-field-group",
-        tags$label(quarter_field$field_label, class = "eval-field-label required"),
-        selectInput(
-          "ass_cc_quart",
-          label = NULL,
-          choices = choices,
-          selected = "",
-          width = "100%"
-        )
+    # Get real completion status if resident is selected
+    completion_table <- NULL
+    if (!is.null(values$selected_resident)) {
+      cat("🔍 Getting REAL completion status for resident:", values$selected_resident$name, "\n")
+      
+      # Use the REAL function
+      completion_data <- get_cc_completion_status(values$selected_resident$name, values$selected_resident$Level)
+      
+      cat("📊 Completion data received, rows:", ifelse(is.null(completion_data), 0, nrow(completion_data)), "\n")
+      
+      if (!is.null(completion_data)) {
+        completion_table <- build_completion_status_display(completion_data)
+      }
+    } else {
+      cat("ℹ️ No resident selected\n")
+    }
+    
+    cat("🏁 Returning quarter dropdown UI\n")
+    
+    tagList(
+      # Show completion status if available
+      completion_table,
+      
+      # Quarter selection dropdown
+      div(class = "eval-field-group",
+          tags$label(quarter_field$field_label, class = "eval-field-label required"),
+          selectInput(
+            "ass_cc_quart",
+            label = NULL,
+            choices = choices,
+            selected = "",
+            width = "100%"
+          )
+      )
     )
   })
   
@@ -598,61 +625,107 @@ server <- function(input, output, session) {
     paste("Rate the resident's performance in:", quarter_desc)
   })
   
-  # Render dynamic questions based on quarter and resident level
   output$cc_dynamic_questions <- renderUI({
+    cat("=== DEBUG: CC DYNAMIC QUESTIONS ===\n")
+    
+    # Check requirements
+    if (is.null(input$ass_cc_quart) || input$ass_cc_quart == "") {
+      cat("❌ No quarter selected\n")
+      return(div(style = "background: red; color: white; padding: 1rem;", "No quarter selected"))
+    }
+    
+    if (is.null(values$selected_resident)) {
+      cat("❌ No resident selected\n") 
+      return(div(style = "background: red; color: white; padding: 1rem;", "No resident selected"))
+    }
+    
+    cat("✅ Quarter:", input$ass_cc_quart, "Resident:", values$selected_resident$Level, "\n")
+    
+    # Get field names
+    field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, values$selected_resident$Level)
+    cat("📋 Found", length(field_names), "fields:", paste(field_names, collapse = ", "), "\n")
+    
+    if (length(field_names) == 0) {
+      return(div(style = "background: orange; color: white; padding: 1rem;", "No fields found"))
+    }
+    
+    # SIMPLE TEST: Just create basic radio buttons without using data dictionary
+    cat("🧪 Creating simple test radio buttons\n")
+    
+    simple_questions <- list(
+      div(
+        style = "background: lightblue; padding: 1rem; margin: 1rem 0; border-radius: 8px;",
+        h5("🧪 Test Question 1: Respond to inbasket items"),
+        radioButtons(
+          inputId = "ass_cc_inb_resp",
+          label = NULL,
+          choices = list(
+            "1 - Infrequently" = "1",
+            "2 - Intermittently" = "2", 
+            "3 - Most of the time" = "3",
+            "4 - Always" = "4",
+            "5 - Unable to answer" = "5"
+          ),
+          selected = character(0)
+        )
+      ),
+      
+      div(
+        style = "background: lightgreen; padding: 1rem; margin: 1rem 0; border-radius: 8px;",
+        h5("🧪 Test Question 2: Review results"),
+        radioButtons(
+          inputId = "ass_cc_inb_resu",
+          label = NULL,
+          choices = list(
+            "1 - Infrequently" = "1",
+            "2 - Intermittently" = "2",
+            "3 - Most of the time" = "3", 
+            "4 - Always" = "4",
+            "5 - Unable to answer" = "5"
+          ),
+          selected = character(0)
+        )
+      ),
+      
+      div(
+        style = "background: lightyellow; padding: 1rem; margin: 1rem 0; border-radius: 8px;",
+        h5("🧪 Debug Info"),
+        p("Quarter selected:", input$ass_cc_quart),
+        p("Resident level:", values$selected_resident$Level),
+        p("Fields expected:", paste(field_names, collapse = ", "))
+      )
+    )
+    
+    cat("✅ Returning", length(simple_questions), "test elements\n")
+    return(simple_questions)
+  })
+  
+  
+  # ============================================================================
+  # ALSO ADD: CC Assessment Subtitle Output (ADD TO SERVER.R)
+  # ============================================================================
+  
+  output$cc_assessment_subtitle <- renderText({
     req(input$ass_cc_quart)
     req(values$selected_resident)
     
-    if (!exists("rdm_dict") || is.null(rdm_dict)) {
-      return(div("Data dictionary not available"))
-    }
-    
-    # Get field names for this quarter and level
-    field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, values$selected_resident$Level)
-    
-    if (length(field_names) == 0) {
-      return(div(
-        class = "text-center",
-        style = "padding: 2rem;",
-        h5("No Questions Available", style = "color: #666;"),
-        p("No evaluation questions found for this quarter and resident level combination.")
-      ))
-    }
-    
-    cat("Building CC questions for quarter", input$ass_cc_quart, "level", values$selected_resident$Level, "\n")
-    cat("Field names:", paste(field_names, collapse = ", "), "\n")
-    
-    # Get field information from data dictionary
-    cc_fields <- rdm_dict %>%
-      filter(form_name == "assessment") %>%
-      filter(field_name %in% field_names) %>%
-      arrange(match(field_name, field_names))  # Maintain order
-    
-    if (nrow(cc_fields) == 0) {
-      return(div(
-        class = "text-center",
-        style = "padding: 2rem;",
-        h5("Configuration Error", style = "color: #dc3545;"),
-        p("Continuity clinic fields not found in data dictionary.")
-      ))
-    }
-    
-    cat("Found", nrow(cc_fields), "fields in data dictionary\n")
-    
-    # Build form fields dynamically
-    assessment_fields <- lapply(1:nrow(cc_fields), function(i) {
-      field_row <- cc_fields[i, ]
-      cat("Building CC field", i, ":", field_row$field_name, "\n")
-      build_field_from_dict(field_row, required = TRUE)
-    })
-    
-    return(assessment_fields)
+    quarter_desc <- get_quarter_description(input$ass_cc_quart, values$selected_resident$Level)
+    paste("Rate the resident's performance in:", quarter_desc)
   })
+  
   
   # Handle quarter selection change (reactive to update questions)
   observeEvent(input$cc_quarter_selected, {
     cat("Quarter selected:", input$cc_quarter_selected, "\n")
     # The dynamic questions will automatically update via the reactive output above
+  })
+  
+  
+  observeEvent(input$ass_cc_quart, {
+    cat("📋 Quarter dropdown changed to:", input$ass_cc_quart, "\n")
+    
+    # The cc_dynamic_questions output will automatically update
+    # because it's reactive to input$ass_cc_quart
   })
   
   # Handle continuity clinic submission
@@ -1024,4 +1097,33 @@ server <- function(input, output, session) {
                        type = "error", duration = 8)
     })
   })
+}
+
+build_cc_completion_reactable <- function(resident_name, resident_level) {
+  tryCatch({
+    # This would require the create_cc_table function to be adapted
+    # For now, we'll use the simpler grid approach above
+    
+    completion_data <- get_cc_completion_status(resident_name, resident_level)
+    
+    if (is.null(completion_data)) {
+      return(div(
+        style = "padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; color: #666;",
+        "📊 Completion status not available"
+      ))
+    }
+    
+    # Convert to format expected by create_cc_table if you want to use that function
+    # This would require adapting your existing create_cc_table function
+    
+    return(div("Reactable version would go here"))
+    
+  }, error = function(e) {
+    return(div(
+      style = "padding: 1rem; background: #ffebee; border-radius: 8px; text-align: center; color: #c62828;",
+      "⚠️ Error loading completion status"
+    ))
+  })
+  
+  
 }

@@ -1233,3 +1233,263 @@ body {
     font-size: 12px;
   }
 }
+
+/* ============================================================================
+   CONTINUITY CLINIC COMPLETION STATUS STYLING
+   ============================================================================ */
+
+/* Main completion status container */
+.cc-completion-status {
+  animation: fadeIn 0.5s ease-in;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #17a2b8;
+}
+
+/* Completion status header */
+.cc-completion-status h6 {
+  margin-bottom: 1rem;
+  color: #17a2b8;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Grid layout for completion items */
+.completion-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+/* Individual completion item styling */
+.completion-item {
+  padding: 0.75rem;
+  border-radius: 6px;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid;
+  position: relative;
+  overflow: hidden;
+}
+
+.completion-item:hover {
+  transform: translateY(-2px);
+}
+
+/* Completed quarter styling */
+.completion-item.completed {
+  background: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+  box-shadow: 0 2px 4px rgba(0, 128, 0, 0.2);
+}
+
+.completion-item.completed:hover {
+  box-shadow: 0 4px 8px rgba(0, 128, 0, 0.3);
+}
+
+/* Pending quarter styling */
+.completion-item.pending {
+  background: #fff3cd;
+  border-color: #ffeaa7;
+  color: #856404;
+  box-shadow: 0 2px 4px rgba(255, 193, 7, 0.2);
+}
+
+.completion-item.pending:hover {
+  box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+}
+
+/* Quarter title styling */
+.completion-item > div:first-child {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+/* Status text styling */
+.completion-item > div:nth-child(2) {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Evaluator name styling */
+.completion-item > div:last-child {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  opacity: 0.8;
+  font-style: italic;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+  .completion-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  
+  .completion-item {
+    padding: 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  .completion-item > div:first-child {
+    font-size: 0.8rem;
+  }
+  
+  .completion-item > div:nth-child(2) {
+    font-size: 0.75rem;
+  }
+  
+  .completion-item > div:last-child {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .completion-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .cc-completion-status {
+    padding: 0.75rem;
+  }
+}
+
+/* Loading state (optional) */
+.completion-loading {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  text-align: center;
+  color: #666;
+  border: 1px dashed #dee2e6;
+}
+
+.completion-loading::before {
+  content: "⏳ ";
+  margin-right: 0.5rem;
+}
+
+/* Error state (optional) */
+.completion-error {
+  padding: 1rem;
+  background: #ffebee;
+  border-radius: 8px;
+  text-align: center;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+.completion-error::before {
+  content: "⚠️ ";
+  margin-right: 0.5rem;
+}
+
+/* Enhanced hover effects for better interactivity */
+.completion-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.completion-item:hover::before {
+  left: 100%;
+}
+
+/* Special styling for current quarter (if you want to highlight it) */
+.completion-item.current-quarter {
+  border-width: 2px;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.completion-item.current-quarter.completed {
+  border-color: #155724;
+  box-shadow: 0 0 0 2px rgba(21, 87, 36, 0.25);
+}
+
+.completion-item.current-quarter.pending {
+  border-color: #856404;
+  box-shadow: 0 0 0 2px rgba(133, 100, 4, 0.25);
+}
+
+/*
+/* Clickable quarter cards */
+.clickable-quarter {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.clickable-quarter:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.clickable-quarter:active {
+  transform: translateY(0);
+}
+
+/* Hover effects for completed vs pending */
+.clickable-quarter.completed:hover {
+  border-color: #155724 !important;
+  background: #c3e6cb !important;
+}
+
+.clickable-quarter.pending:hover {
+  border-color: #856404 !important;
+  background: #ffeaa7 !important;
+}
+
+/* Click indicator animation */
+.clickable-quarter::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255,255,255,0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+}
+
+.clickable-quarter:active::after {
+  width: 100%;
+  height: 100%;
+}
+
+/* Modal styling */
+.modal-content {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+  border-radius: 12px 12px 0 0;
+}
+*/

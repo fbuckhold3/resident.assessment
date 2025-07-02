@@ -123,9 +123,7 @@ build_radio_field_from_dict <- function(field_row, required = FALSE) {
         label = NULL,
         choices = choices,
         selected = character(0),
-        width = "100%",
-        choiceNames = names(choices),
-        choiceValues = unname(choices)
+        width = "100%"
       )
   )
 }
@@ -783,11 +781,27 @@ get_next_eval_instance <- function(resident_id, eval_type, token, url) {
 
 build_continuity_clinic_form <- function() {
   tagList(
-    # Step 1: Plus/Delta section (always visible)
+    # Step 1: Quarter Selection (always visible)
     div(class = "eval-section",
         div(class = "eval-section-header",
-            h4("Step 1: Required Feedback", class = "eval-section-title"),
-            p("Please complete the Plus and Delta comments before proceeding to the quarter selection.", 
+            h4("Step 1: Select Quarter", class = "eval-section-title"),
+            p("Choose which quarter/evaluation type you are completing:", 
+              class = "eval-section-description")
+        ),
+        
+        div(class = "eval-field-group",
+            # Get quarter dropdown from data dictionary (with completion status)
+            uiOutput("quarter_dropdown"),
+            div(class = "eval-field-help",
+                "Quarters refer to time in academic year; 1st Quarter is Fall (end of September), 2nd Quarter is Winter (end of December), etc.")
+        )
+    ),
+    
+    # Step 2: Plus/Delta section (always visible)
+    div(class = "eval-section",
+        div(class = "eval-section-header",
+            h4("Step 2: Required Feedback", class = "eval-section-title"),
+            p("Please complete the Plus and Delta comments:", 
               class = "eval-section-description")
         ),
         
@@ -800,8 +814,7 @@ build_continuity_clinic_form <- function() {
                       id = "ass_plus",
                       class = "form-control eval-textarea",
                       placeholder = "Describe specific strengths and positive observations...",
-                      rows = "4",
-                      onchange = "checkContinuityStep1Complete()"
+                      rows = "4"
                     ),
                     # Speech-to-text button
                     conditionalPanel(
@@ -828,8 +841,7 @@ build_continuity_clinic_form <- function() {
                       id = "ass_delta", 
                       class = "form-control eval-textarea",
                       placeholder = "Describe specific opportunities for growth...",
-                      rows = "4",
-                      onchange = "checkContinuityStep1Complete()"
+                      rows = "4"
                     ),
                     # Speech-to-text button
                     conditionalPanel(
@@ -847,163 +859,36 @@ build_continuity_clinic_form <- function() {
                 div(class = "eval-field-help",
                     "Provide constructive feedback on areas where the resident can improve.")
             )
-        ),
-        
-        # Continue to quarter selection button
-        div(class = "text-center mt-3",
-            actionButton("continue_to_quarter_selection", "Continue to Quarter Selection →", 
-                         class = "btn btn-primary btn-lg", style = "display: none;")
         )
     ),
     
-    # Step 2: Quarter Selection (initially hidden)
-    div(id = "quarter_selection_section", style = "display: none;",
-        div(class = "eval-section",
-            div(class = "eval-section-header",
-                h4("Step 2: Select Quarter", class = "eval-section-title"),
-                p("Choose which quarter/evaluation type you are completing:", 
-                  class = "eval-section-description")
-            ),
-            
-            div(class = "eval-field-group",
-                # Get quarter dropdown from data dictionary
-                uiOutput("quarter_dropdown"),
-                div(class = "eval-field-help",
-                    "Quarters refer to time in academic year; 1st Quarter is Fall (end of September), 2nd Quarter is Winter (end of December), etc.")
-            ),
-            
-            # Continue to assessment button
-            div(class = "text-center mt-3",
-                actionButton("continue_to_cc_assessment", "Continue to Assessment Questions →", 
-                             class = "btn btn-primary btn-lg", style = "display: none;")
-            )
-        )
+    # Step 3: Dynamic Assessment Questions (always visible when quarter selected)
+    div(
+      class = "eval-section",
+      style = "border: 2px solid red; padding: 1rem; margin: 1rem 0; background: white;", # Debug styling
+      div(class = "eval-section-header",
+          h4("Step 3: Assessment Questions", class = "eval-section-title", style = "color: red;"),
+          p("This section should ALWAYS be visible", style = "color: red; font-weight: bold;")
+      ),
+      
+      div(class = "eval-questions-container",
+          style = "border: 2px solid blue; padding: 1rem; background: #f0f0f0;", # Debug styling
+          uiOutput("cc_dynamic_questions")
+      )
     ),
     
-    # Step 3: Dynamic Assessment Questions (initially hidden)
-    div(id = "cc_assessment_questions_section", style = "display: none;",
-        div(class = "eval-section",
-            div(class = "eval-section-header",
-                h4("Step 3: Continuity Clinic Assessment", class = "eval-section-title"),
-                uiOutput("cc_assessment_subtitle")
-            ),
-            
-            div(class = "eval-questions-container",
-                uiOutput("cc_dynamic_questions")
-            )
-        )
-    ),
-    
-    # Form controls (initially hidden)
-    div(id = "cc_form_controls_section", class = "eval-form-controls", style = "display: none;",
+    # Form controls (always visible)
+    div(class = "eval-form-controls",
         div(class = "text-center mt-4",
             actionButton("back_to_eval_selection", "← Back to Evaluation Types", 
                          class = "btn btn-secondary me-2"),
             actionButton("submit_continuity_clinic_evaluation", "Submit Evaluation", 
                          class = "btn btn-success btn-lg")
         )
-    ),
-    
-    # JavaScript for progressive disclosure and dynamic form handling
-    tags$script(HTML("
-      // Global variable to track resident level
-      var residentLevel = null;
-      
-      // Get resident level from Shiny (this will be set by the server)
-      $(document).ready(function() {
-        Shiny.addCustomMessageHandler('setResidentLevel', function(level) {
-          residentLevel = level;
-          console.log('Resident level set to:', residentLevel);
-        });
-      });
-      
-      // Check if Plus and Delta are both completed
-      function checkContinuityStep1Complete() {
-        var plusValue = $('#ass_plus').val();
-        var deltaValue = $('#ass_delta').val();
-        
-        if (plusValue && plusValue.trim() && deltaValue && deltaValue.trim()) {
-          $('#continue_to_quarter_selection').show();
-          setTimeout(function() {
-            $('#continue_to_quarter_selection')[0].scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'center' 
-            });
-          }, 100);
-        } else {
-          $('#continue_to_quarter_selection').hide();
-          $('#quarter_selection_section').hide();
-          $('#cc_assessment_questions_section').hide();
-          $('#cc_form_controls_section').hide();
-        }
-      }
-      
-      // Handle continue to quarter selection
-      $(document).on('click', '#continue_to_quarter_selection', function() {
-        $('#quarter_selection_section').slideDown(500);
-        $('#continue_to_quarter_selection').hide();
-        
-        setTimeout(function() {
-          $('#quarter_selection_section')[0].scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-          });
-        }, 600);
-      });
-      
-      // Handle quarter selection change
-      function checkQuarterSelected() {
-        var quarterValue = $('#ass_cc_quart').val();
-        
-        if (quarterValue && quarterValue !== '') {
-          $('#continue_to_cc_assessment').show();
-          
-          // Trigger server-side update of questions
-          Shiny.setInputValue('cc_quarter_selected', quarterValue, {priority: 'event'});
-          
-          setTimeout(function() {
-            $('#continue_to_cc_assessment')[0].scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'center' 
-            });
-          }, 100);
-        } else {
-          $('#continue_to_cc_assessment').hide();
-          $('#cc_assessment_questions_section').hide();
-          $('#cc_form_controls_section').hide();
-        }
-      }
-      
-      // Handle continue to assessment
-      $(document).on('click', '#continue_to_cc_assessment', function() {
-        $('#cc_assessment_questions_section').slideDown(500);
-        $('#cc_form_controls_section').slideDown(500);
-        $('#continue_to_cc_assessment').hide();
-        
-        setTimeout(function() {
-          $('#cc_assessment_questions_section')[0].scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-          });
-        }, 600);
-      });
-      
-      // Initialize event listeners
-      $(document).ready(function() {
-        $('#ass_plus, #ass_delta').on('input paste keyup', function() {
-          setTimeout(checkContinuityStep1Complete, 100);
-        });
-        
-        // Set up quarter selection listener (will be created dynamically)
-        $(document).on('change', '#ass_cc_quart', function() {
-          setTimeout(checkQuarterSelected, 100);
-        });
-        
-        checkContinuityStep1Complete();
-      });
-    "))
+    )
   )
 }
+
 
 # ============================================================================
 # DYNAMIC QUESTION BUILDERS BASED ON QUARTER AND LEVEL

@@ -619,4 +619,253 @@ get_field_name <- function(data, preferred_fields) {
   return(names(data)[1])  # fallback
 }
 
+# Add this function to your server.R (or helpers.R)
+get_cc_completion_status <- function(resident_name, resident_level) {
+  tryCatch({
+    cat("=== FIXED REDCAP QUERY: Getting CC completion status ===\n")
+    cat("Resident:", resident_name, "Level:", resident_level, "\n")
+    
+    # Check if we have the necessary REDCap credentials
+    if (!exists("rdm_token") || !exists("url")) {
+      cat("❌ REDCap credentials not available\n")
+      return(create_empty_completion_status())
+    }
+    
+    if (!exists("resident_data") || is.null(resident_data)) {
+      cat("❌ Resident data not available\n")
+      return(create_empty_completion_status())
+    }
+    
+    # Get the resident's record ID
+    resident_record <- resident_data %>%
+      filter(name == resident_name) %>%
+      slice(1)
+    
+    if (nrow(resident_record) == 0) {
+      cat("❌ Resident not found in resident_data:", resident_name, "\n")
+      return(create_empty_completion_status())
+    }
+    
+    resident_id <- resident_record$record_id
+    cat("✅ Found resident ID:", resident_id, "\n")
+    
+    # Query REDCap for assessment records for this resident
+    cat("📡 Querying REDCap for assessment data...\n")
+    
+    response <- httr::POST(
+      url = url,
+      body = list(
+        token = rdm_token,
+        content = "record",
+        action = "export",
+        format = "json",
+        type = "flat",
+        records = as.character(resident_id),
+        forms = "assessment",
+        rawOrLabel = "raw",
+        rawOrLabelHeaders = "raw",
+        exportCheckboxLabel = "false",
+        exportSurveyFields = "false",
+        exportDataAccessGroups = "false",
+        returnFormat = "json"
+      ),
+      encode = "form"
+    )
+    
+    cat("📡 REDCap response status:", httr::status_code(response), "\n")
+    
+    if (httr::status_code(response) != 200) {
+      cat("❌ REDCap query failed with status:", httr::status_code(response), "\n")
+      return(create_empty_completion_status())
+    }
+    
+    # Parse the response
+    response_text <- httr::content(response, "text", encoding = "UTF-8")
+    assessment_data <- jsonlite::fromJSON(response_text)
+    
+    cat("📊 Retrieved", nrow(assessment_data), "assessment records\n")
+    
+    if (!is.data.frame(assessment_data) || nrow(assessment_data) == 0) {
+      cat("ℹ️ No assessment data found for resident\n")
+      return(create_empty_completion_status())
+    }
+    
+    # FIXED: Better filtering logic
+    # Look for records where ass_cc_quart has a value and is not empty
+    has_cc_quarter <- !is.na(assessment_data$ass_cc_quart) & 
+      assessment_data$ass_cc_quart != "" & 
+      assessment_data$ass_cc_quart %in% c("1", "2", "3", "4")
+    
+    cc_evaluations <- assessment_data[has_cc_quarter, ]
+    
+    cat("🎯 Found", nrow(cc_evaluations), "CC evaluations\n")
+    
+    if (nrow(cc_evaluations) > 0) {
+      cat("📝 CC evaluation quarters found:", paste(cc_evaluations$ass_cc_quart, collapse = ", "), "\n")
+      
+      # Debug: show CC evaluation data
+      for (i in 1:nrow(cc_evaluations)) {
+        eval_row <- cc_evaluations[i, ]
+        cat("   - Quarter", eval_row$ass_cc_quart, "by", eval_row$ass_faculty, "on", eval_row$ass_date, "\n")
+      }
+    }
+    
+    # Create completion status for all 4 quarters
+    quarters <- c("1", "2", "3", "4")
+    quarter_labels <- c(
+      "1" = "Q1 - In-Basket (Fall)",
+      "2" = "Q2 - Semi-Annual (Winter)", 
+      "3" = "Q3 - Documentation (Spring)",
+      "4" = "Q4 - Semi-Annual (Summer)"
+    )
+    
+    completion_data <- data.frame(
+      quarter = quarters,
+      quarter_label = quarter_labels[quarters],
+      completed = sapply(quarters, function(q) {
+        completed <- any(cc_evaluations$ass_cc_quart == q, na.rm = TRUE)
+        cat("📊 Quarter", q, "completed:", completed, "\n")
+        return(completed)
+      }),
+      evaluator = sapply(quarters, function(q) {
+        matching_evals <- cc_evaluations[cc_evaluations$ass_cc_quart == q & !is.na(cc_evaluations$ass_cc_quart), ]
+        if (nrow(matching_evals) > 0) {
+          evaluator <- matching_evals$ass_faculty[1]
+          if (!is.na(evaluator) && evaluator != "") {
+            cat("👨‍⚕️ Quarter", q, "evaluator:", evaluator, "\n")
+            return(evaluator)
+          }
+        }
+        return(NA_character_)
+      }),
+      evaluation_date = sapply(quarters, function(q) {
+        matching_evals <- cc_evaluations[cc_evaluations$ass_cc_quart == q & !is.na(cc_evaluations$ass_cc_quart), ]
+        if (nrow(matching_evals) > 0) {
+          eval_date <- matching_evals$ass_date[1]
+          if (!is.na(eval_date) && eval_date != "") {
+            return(eval_date)
+          }
+        }
+        return(NA_character_)
+      }),
+      stringsAsFactors = FALSE
+    )
+    
+    cat("✅ Completion status created successfully\n")
+    cat("📊 Summary: ", sum(completion_data$completed), "out of 4 quarters completed\n")
+    
+    return(completion_data)
+    
+  }, error = function(e) {
+    cat("❌ Error in get_cc_completion_status:", e$message, "\n")
+    return(create_empty_completion_status())
+  })
+}
+
+
+create_empty_completion_status <- function() {
+  quarters <- c("1", "2", "3", "4")
+  quarter_labels <- c(
+    "1" = "Q1 - In-Basket (Fall)",
+    "2" = "Q2 - Semi-Annual (Winter)", 
+    "3" = "Q3 - Documentation (Spring)",
+    "4" = "Q4 - Semi-Annual (Summer)"
+  )
+  
+  data.frame(
+    quarter = quarters,
+    quarter_label = quarter_labels[quarters],
+    completed = rep(FALSE, 4),  # All quarters pending
+    evaluator = rep(NA_character_, 4),
+    evaluation_date = rep(NA_character_, 4),
+    stringsAsFactors = FALSE
+  )
+}
+
+build_completion_status_display <- function(completion_data) {
+  if (is.null(completion_data) || nrow(completion_data) == 0) {
+    return(div(
+      style = "padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; color: #666; border: 1px dashed #dee2e6;",
+      "📊 No completion data available"
+    ))
+  }
+  
+  div(
+    class = "cc-completion-status",
+    style = "margin-bottom: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #17a2b8;",
+    h6("📊 Current Completion Status", style = "margin-bottom: 0.5rem; color: #17a2b8; font-weight: 600;"),
+    p("Click on any quarter to select it:", style = "margin-bottom: 1rem; font-size: 0.9rem; color: #666; font-style: italic;"),
+    div(class = "completion-grid", style = "display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;",
+        lapply(1:nrow(completion_data), function(i) {
+          row <- completion_data[i, ]
+          status_class <- if (row$completed) "completed" else "pending"
+          status_icon <- if (row$completed) "✅" else "⭕"
+          status_text <- if (row$completed) "Completed" else "Pending"
+          
+          # Build evaluator and date text
+          detail_text <- ""
+          if (row$completed && !is.na(row$evaluator)) {
+            detail_text <- paste("by", row$evaluator)
+            if (!is.na(row$evaluation_date)) {
+              formatted_date <- tryCatch({
+                date_obj <- as.Date(row$evaluation_date)
+                format(date_obj, "%m/%d/%Y")
+              }, error = function(e) row$evaluation_date)
+              detail_text <- paste0(detail_text, " (", formatted_date, ")")
+            }
+          }
+          
+          # Create action button instead of div with onclick
+          if (row$completed) {
+            # For completed quarters - show info modal
+            div(
+              class = paste("completion-item", status_class),
+              style = paste0(
+                "padding: 0.75rem; border-radius: 6px; text-align: center; ",
+                "background: #d4edda; border: 1px solid #c3e6cb; color: #155724;"
+              ),
+              div(style = "font-weight: 600; margin-bottom: 0.25rem;", paste(status_icon, row$quarter_label)),
+              div(style = "font-size: 0.85rem;", status_text),
+              if (detail_text != "") {
+                div(style = "font-size: 0.75rem; margin-top: 0.25rem; opacity: 0.8;", detail_text)
+              },
+              div(style = "font-size: 0.7rem; margin-top: 0.5rem; opacity: 0.6;", "Already completed"),
+              br(),
+              actionButton(
+                inputId = paste0("cc_select_quarter_", row$quarter),
+                label = "Select Anyway",
+                class = "btn btn-sm btn-outline-success",
+                style = "font-size: 0.75rem; padding: 0.25rem 0.5rem;"
+              )
+            )
+          } else {
+            # For pending quarters - direct selection
+            div(
+              class = paste("completion-item", status_class),
+              style = paste0(
+                "padding: 0.75rem; border-radius: 6px; text-align: center; ",
+                "background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"
+              ),
+              div(style = "font-weight: 600; margin-bottom: 0.25rem;", paste(status_icon, row$quarter_label)),
+              div(style = "font-size: 0.85rem;", status_text),
+              div(style = "font-size: 0.7rem; margin-top: 0.5rem; opacity: 0.6;", "Click to start"),
+              br(),
+              actionButton(
+                inputId = paste0("cc_select_quarter_", row$quarter),
+                label = "Start Evaluation",
+                class = "btn btn-sm btn-warning",
+                style = "font-size: 0.75rem; padding: 0.25rem 0.5rem;"
+              )
+            )
+          }
+        })
+    )
+  )
+}
+
+
+
+
+
+
 
