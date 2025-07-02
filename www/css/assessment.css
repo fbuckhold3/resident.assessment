@@ -1493,3 +1493,391 @@ body {
   border-radius: 12px 12px 0 0;
 }
 */
+
+/* Add these styles to your assessment.css file */
+
+/* Clickable quarter cards */
+.clickable-quarter {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  user-select: none;
+}
+
+.clickable-quarter:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.clickable-quarter:active {
+  transform: translateY(0);
+}
+
+/* Hover effects for completed vs pending */
+.clickable-quarter.completed:hover {
+  border-color: #155724 !important;
+  background: #c3e6cb !important;
+}
+
+.clickable-quarter.pending:hover {
+  border-color: #856404 !important;
+  background: #ffeaa7 !important;
+}
+
+/* Click indicator animation */
+.clickable-quarter::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255,255,255,0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+}
+
+.clickable-quarter:active::after {
+  width: 100%;
+  height: 100%;
+}
+
+/* Enhanced quarter selection grid */
+.completion-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Selected quarter highlighting */
+.clickable-quarter.selected {
+  border-color: #007bff !important;
+  background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%) !important;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25) !important;
+  transform: scale(1.02);
+}
+
+.clickable-quarter.selected::before {
+  content: '👆';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: #007bff;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  z-index: 10;
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+  .completion-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .clickable-quarter {
+    padding: 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .clickable-quarter:hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* Loading state for quarter selection */
+.quarter-selection-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px dashed #dee2e6;
+}
+
+.quarter-selection-loading::before {
+  content: "⏳";
+  margin-right: 0.5rem;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Smooth transitions for conditional panels */
+.eval-section {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Add these styles to your assessment.css file */
+
+/* ============================================================================
+   OBSERVATION TYPE SELECTION STYLING
+   ============================================================================ */
+
+/* Observation type selection container */
+.obs-type-selection {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-radius: 16px;
+  border: 2px dashed rgba(0, 102, 161, 0.2);
+}
+
+/* Observation type button grid */
+.obs-type-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+/* Individual observation type buttons */
+.obs-type-button {
+  background: linear-gradient(135deg, var(--ssm-white) 0%, #f8f9fa 100%);
+  border: 2px solid rgba(0, 102, 161, 0.2);
+  border-radius: 12px;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  user-select: none;
+}
+
+.obs-type-button:hover {
+  border-color: var(--ssm-secondary-blue);
+  background: linear-gradient(135deg, #ffffff 0%, #e3f2fd 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 102, 161, 0.15);
+}
+
+.obs-type-button:active {
+  transform: translateY(0);
+}
+
+/* Disabled observation buttons */
+.obs-type-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+  border-color: #ccc;
+}
+
+.obs-type-button.disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: #ccc;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+}
+
+/* Selected observation type */
+.obs-type-button.selected {
+  border-color: var(--ssm-success-green) !important;
+  background: linear-gradient(135deg, #d4edda 0%, #ffffff 100%) !important;
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.25) !important;
+  transform: scale(1.02);
+}
+
+.obs-type-button.selected::before {
+  content: '✓';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--ssm-success-green);
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 10;
+}
+
+/* Observation type content */
+.obs-type-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.8;
+}
+
+.obs-type-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ssm-primary-blue);
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+}
+
+.obs-type-description {
+  font-size: 0.85rem;
+  color: var(--ssm-text-secondary);
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+}
+
+.obs-type-restriction {
+  background: rgba(255, 152, 0, 0.1);
+  color: #ff9800;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+/* Click animation effect */
+.obs-type-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+}
+
+.obs-type-button:active::after {
+  width: 100%;
+  height: 100%;
+}
+
+/* Responsive design for observation buttons */
+@media (max-width: 768px) {
+  .obs-type-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .obs-type-button {
+    min-height: 100px;
+    padding: 1rem 0.5rem;
+  }
+  
+  .obs-type-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .obs-type-title {
+    font-size: 0.95rem;
+  }
+  
+  .obs-type-description {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .obs-type-container {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .obs-type-button {
+    min-height: 90px;
+    padding: 0.75rem;
+  }
+  
+  .obs-type-icon {
+    font-size: 1.75rem;
+  }
+  
+  .obs-type-title {
+    font-size: 0.9rem;
+  }
+  
+  .obs-type-description {
+    font-size: 0.75rem;
+  }
+}
+
+/* Loading state for observation selection */
+.obs-selection-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px dashed #dee2e6;
+}
+
+.obs-selection-loading::before {
+  content: "⏳";
+  margin-right: 0.5rem;
+  animation: spin 2s linear infinite;
+}
+
+/* Special styling for high-priority observations */
+.obs-type-button[data-priority="high"] {
+  border-color: rgba(220, 53, 69, 0.3);
+}
+
+.obs-type-button[data-priority="high"]:hover {
+  border-color: #dc3545;
+  background: linear-gradient(135deg, #ffffff 0%, #ffebee 100%);
+}
+
+.obs-type-button[data-priority="high"] .obs-type-icon {
+  color: #dc3545;
+}
+
+/* Emergency observation special styling */
+.obs-type-button[onclick*="'13'"] {
+  border-color: rgba(220, 53, 69, 0.3);
+}
+
+.obs-type-button[onclick*="'13'"]:hover {
+  border-color: #dc3545;
+  background: linear-gradient(135deg, #ffffff 0%, #ffebee 100%);
+}
+
+.obs-type-button[onclick*="'13'"] .obs-type-icon {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}

@@ -1,4 +1,4 @@
-# server.R - Faculty Evaluation App (Updated with All Evaluation Types)
+# server.R - Faculty Evaluation App (Complete Rewrite with Observations)
 
 server <- function(input, output, session) {
   
@@ -9,7 +9,7 @@ server <- function(input, output, session) {
     selected_eval_type = NULL,
     current_search_results = NULL,
     current_resident_results = NULL,
-    current_step = "intro"  # Start with intro page
+    current_step = "intro"
   )
   
   # Helper function to get field name safely
@@ -59,7 +59,7 @@ server <- function(input, output, session) {
     values$selected_eval_type <- NULL
     values$current_search_results <- NULL
     values$current_resident_results <- NULL
-    values$current_step <- "intro"  # Go back to intro page
+    values$current_step <- "intro"
     
     updateTextInput(session, "faculty_search", value = "")
     updateTextInput(session, "resident_search", value = "")
@@ -507,11 +507,17 @@ server <- function(input, output, session) {
                            },
                            "cc" = {
                              if (exists("build_continuity_clinic_form")) {
-                               # Send resident level to JavaScript
                                session$sendCustomMessage("setResidentLevel", values$selected_resident$Level)
                                build_continuity_clinic_form()
                              } else {
                                build_form_error("Continuity Clinic form builder function not found.")
+                             }
+                           },
+                           "obs" = {
+                             if (exists("build_observation_form")) {
+                               build_observation_form()
+                             } else {
+                               build_form_error("Observation form builder function not found.")
                              }
                            },
                            {
@@ -547,185 +553,155 @@ server <- function(input, output, session) {
     return(form_content)
   })
   
-  # Render the quarter dropdown dynamically
-  output$quarter_dropdown <- renderUI({
-    cat("=== RENDERING QUARTER DROPDOWN (REAL DATA) ===\n")
+  # Helper function to build error messages
+  build_form_error <- function(message) {
+    div(style = "text-align: center; padding: 2rem;",
+        h5("Form Builder Error", style = "color: #dc3545;"),
+        p(message),
+        br(),
+        actionButton("back_to_eval_selection", "← Back to Evaluation Types", class = "btn btn-secondary"))
+  }
+  
+  # ============================================================================
+  # CONTINUITY CLINIC EVALUATION SERVER CODE
+  # ============================================================================
+  
+  # Render the quarter selection table
+  output$quarter_selection_table <- renderUI({
+    cat("=== RENDERING QUARTER SELECTION TABLE ===\n")
     
-    if (!exists("rdm_dict") || is.null(rdm_dict)) {
-      return(div("Data dictionary not available"))
+    if (is.null(values$selected_resident)) {
+      return(div("No resident selected"))
     }
     
-    # Get quarter field from data dictionary
-    quarter_field <- rdm_dict %>%
-      filter(form_name == "assessment") %>%
-      filter(field_name == "ass_cc_quart") %>%
-      slice(1)
+    # Get completion status with academic year filtering
+    completion_data <- get_cc_completion_status(values$selected_resident$name, values$selected_resident$Level)
     
-    if (nrow(quarter_field) == 0) {
-      return(div("Quarter field not found in data dictionary"))
+    cat("📊 Completion data received, rows:", ifelse(is.null(completion_data), 0, nrow(completion_data)), "\n")
+    
+    if (is.null(completion_data)) {
+      return(div("Error loading completion data"))
     }
     
-    # Parse choices from data dictionary
-    choices_text <- quarter_field$select_choices_or_calculations
-    choices_list <- strsplit(choices_text, " \\| ")[[1]]
-    choices <- list("Choose quarter/evaluation type..." = "")
-    
-    for (choice in choices_list) {
-      parts <- strsplit(choice, ", ", fixed = TRUE)[[1]]
-      if (length(parts) >= 2) {
-        value <- trimws(parts[1])
-        label <- trimws(paste(parts[2:length(parts)], collapse = ", "))
-        choices[[label]] <- value
-      }
-    }
-    
-    # Get real completion status if resident is selected
-    completion_table <- NULL
-    if (!is.null(values$selected_resident)) {
-      cat("🔍 Getting REAL completion status for resident:", values$selected_resident$name, "\n")
-      
-      # Use the REAL function
-      completion_data <- get_cc_completion_status(values$selected_resident$name, values$selected_resident$Level)
-      
-      cat("📊 Completion data received, rows:", ifelse(is.null(completion_data), 0, nrow(completion_data)), "\n")
-      
-      if (!is.null(completion_data)) {
-        completion_table <- build_completion_status_display(completion_data)
-      }
-    } else {
-      cat("ℹ️ No resident selected\n")
-    }
-    
-    cat("🏁 Returning quarter dropdown UI\n")
-    
-    tagList(
-      # Show completion status if available
-      completion_table,
-      
-      # Quarter selection dropdown
-      div(class = "eval-field-group",
-          tags$label(quarter_field$field_label, class = "eval-field-label required"),
-          selectInput(
-            "ass_cc_quart",
-            label = NULL,
-            choices = choices,
-            selected = "",
-            width = "100%"
-          )
-      )
-    )
+    # Build the clickable table
+    build_clickable_quarter_table(completion_data)
   })
   
-  # Render assessment subtitle based on quarter and level
-  output$cc_assessment_subtitle <- renderText({
+  # Add new output for dynamic quarter subtitle
+  output$cc_quarter_subtitle <- renderUI({
     req(input$ass_cc_quart)
     req(values$selected_resident)
     
     quarter_desc <- get_quarter_description(input$ass_cc_quart, values$selected_resident$Level)
-    paste("Rate the resident's performance in:", quarter_desc)
+    p(paste("Selected evaluation:", quarter_desc), 
+      style = "margin: 0; opacity: 0.9; font-weight: 500;")
+  })
+  
+  # Handle manual quarter selection
+  observeEvent(input$cc_quarter_manually_selected, {
+    selection_data <- input$cc_quarter_manually_selected
+    
+    cat("=== QUARTER MANUALLY SELECTED ===\n")
+    cat("Quarter:", selection_data$quarter, "\n")
+    cat("Label:", selection_data$label, "\n")
+    cat("Was completed:", selection_data$isCompleted, "\n")
+    
+    # Store selection info for validation/submission
+    values$cc_quarter_selection_info <- selection_data
+    
+    # Show notification
+    if (selection_data$isCompleted) {
+      showNotification(
+        paste("⚠️ Re-evaluating completed quarter:", selection_data$label),
+        type = "warning",
+        duration = 4
+      )
+    } else {
+      showNotification(
+        paste("✅ Starting evaluation for:", selection_data$label),
+        type = "default",
+        duration = 3
+      )
+    }
   })
   
   output$cc_dynamic_questions <- renderUI({
-    cat("=== DEBUG: CC DYNAMIC QUESTIONS ===\n")
-    
-    # Check requirements
-    if (is.null(input$ass_cc_quart) || input$ass_cc_quart == "") {
-      cat("❌ No quarter selected\n")
-      return(div(style = "background: red; color: white; padding: 1rem;", "No quarter selected"))
-    }
-    
-    if (is.null(values$selected_resident)) {
-      cat("❌ No resident selected\n") 
-      return(div(style = "background: red; color: white; padding: 1rem;", "No resident selected"))
-    }
-    
-    cat("✅ Quarter:", input$ass_cc_quart, "Resident:", values$selected_resident$Level, "\n")
-    
-    # Get field names
-    field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, values$selected_resident$Level)
-    cat("📋 Found", length(field_names), "fields:", paste(field_names, collapse = ", "), "\n")
-    
-    if (length(field_names) == 0) {
-      return(div(style = "background: orange; color: white; padding: 1rem;", "No fields found"))
-    }
-    
-    # SIMPLE TEST: Just create basic radio buttons without using data dictionary
-    cat("🧪 Creating simple test radio buttons\n")
-    
-    simple_questions <- list(
-      div(
-        style = "background: lightblue; padding: 1rem; margin: 1rem 0; border-radius: 8px;",
-        h5("🧪 Test Question 1: Respond to inbasket items"),
-        radioButtons(
-          inputId = "ass_cc_inb_resp",
-          label = NULL,
-          choices = list(
-            "1 - Infrequently" = "1",
-            "2 - Intermittently" = "2", 
-            "3 - Most of the time" = "3",
-            "4 - Always" = "4",
-            "5 - Unable to answer" = "5"
-          ),
-          selected = character(0)
-        )
-      ),
-      
-      div(
-        style = "background: lightgreen; padding: 1rem; margin: 1rem 0; border-radius: 8px;",
-        h5("🧪 Test Question 2: Review results"),
-        radioButtons(
-          inputId = "ass_cc_inb_resu",
-          label = NULL,
-          choices = list(
-            "1 - Infrequently" = "1",
-            "2 - Intermittently" = "2",
-            "3 - Most of the time" = "3", 
-            "4 - Always" = "4",
-            "5 - Unable to answer" = "5"
-          ),
-          selected = character(0)
-        )
-      ),
-      
-      div(
-        style = "background: lightyellow; padding: 1rem; margin: 1rem 0; border-radius: 8px;",
-        h5("🧪 Debug Info"),
-        p("Quarter selected:", input$ass_cc_quart),
-        p("Resident level:", values$selected_resident$Level),
-        p("Fields expected:", paste(field_names, collapse = ", "))
-      )
-    )
-    
-    cat("✅ Returning", length(simple_questions), "test elements\n")
-    return(simple_questions)
-  })
-  
-  
-  # ============================================================================
-  # ALSO ADD: CC Assessment Subtitle Output (ADD TO SERVER.R)
-  # ============================================================================
-  
-  output$cc_assessment_subtitle <- renderText({
     req(input$ass_cc_quart)
     req(values$selected_resident)
     
-    quarter_desc <- get_quarter_description(input$ass_cc_quart, values$selected_resident$Level)
-    paste("Rate the resident's performance in:", quarter_desc)
+    cat("=== BUILDING CC DYNAMIC QUESTIONS ===\n")
+    cat("Quarter:", input$ass_cc_quart, "Resident Level:", values$selected_resident$Level, "\n")
+    
+    # Get field names for this quarter and level
+    field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, values$selected_resident$Level)
+    
+    cat("📋 Found", length(field_names), "fields:", paste(field_names, collapse = ", "), "\n")
+    
+    if (length(field_names) == 0) {
+      return(div(
+        style = "padding: 1rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; text-align: center;",
+        h6("No Questions Available", style = "color: #856404;"),
+        p("No evaluation questions found for this quarter and resident level combination.")
+      ))
+    }
+    
+    # Get the relevant fields from the data dictionary
+    if (!exists("rdm_dict") || is.null(rdm_dict)) {
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Configuration Error", style = "color: #721c24;"),
+        p("Data dictionary not available.")
+      ))
+    }
+    
+    # Build questions from data dictionary
+    question_fields <- rdm_dict %>%
+      filter(form_name == "assessment") %>%
+      filter(field_name %in% field_names) %>%
+      arrange(match(field_name, field_names))  # Preserve order
+    
+    cat("📝 Found", nrow(question_fields), "questions in data dictionary\n")
+    
+    if (nrow(question_fields) == 0) {
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Questions Not Found", style = "color: #721c24;"),
+        p("The expected question fields were not found in the data dictionary.")
+      ))
+    }
+    
+    # Build form fields
+    question_elements <- lapply(1:nrow(question_fields), function(i) {
+      field_row <- question_fields[i, ]
+      cat("Building question", i, ":", field_row$field_name, "\n")
+      
+      # Build field based on type
+      if (field_row$field_type == "radio") {
+        build_radio_field_from_dict(field_row, required = TRUE)
+      } else if (field_row$field_type == "dropdown") {
+        build_dropdown_field_from_dict(field_row, required = TRUE)
+      } else {
+        # Default to text input for other types
+        div(class = "eval-field-group",
+            tags$label(field_row$field_label, class = "eval-field-label required"),
+            textInput(
+              field_row$field_name,
+              label = NULL,
+              placeholder = paste("Enter", tolower(field_row$field_label), "...")
+            )
+        )
+      }
+    })
+    
+    cat("✅ Built", length(question_elements), "question elements\n")
+    
+    # Return the question elements
+    tagList(question_elements)
   })
   
-  
-  # Handle quarter selection change (reactive to update questions)
-  observeEvent(input$cc_quarter_selected, {
-    cat("Quarter selected:", input$cc_quarter_selected, "\n")
-    # The dynamic questions will automatically update via the reactive output above
-  })
-  
-  
+  # Handle quarter selection change
   observeEvent(input$ass_cc_quart, {
     cat("📋 Quarter dropdown changed to:", input$ass_cc_quart, "\n")
-    
-    # The cc_dynamic_questions output will automatically update
-    # because it's reactive to input$ass_cc_quart
   })
   
   # Handle continuity clinic submission
@@ -808,28 +784,302 @@ server <- function(input, output, session) {
     })
   })
   
-  # Helper function to build error messages
-  build_form_error <- function(message) {
-    div(style = "text-align: center; padding: 2rem;",
-        h5("Form Builder Error", style = "color: #dc3545;"),
-        p(message),
-        br(),
-        actionButton("back_to_eval_selection", "← Back to Evaluation Types", class = "btn btn-secondary"))
-  }
+  # ============================================================================
+  # OBSERVATION EVALUATION SERVER CODE
+  # ============================================================================
+  
+  # Render observation type selection buttons
+  output$observation_type_selection <- renderUI({
+    req(values$selected_resident)
+    
+    cat("=== RENDERING OBSERVATION TYPE SELECTION ===\n")
+    cat("Resident level:", values$selected_resident$Level, "\n")
+    
+    if (!exists("build_observation_type_buttons")) {
+      return(div(
+        style = "padding: 2rem; background: #f8d7da; border-radius: 8px; text-align: center;",
+        h5("Function Missing", style = "color: #721c24;"),
+        p("build_observation_type_buttons function not found in evaluation_form_builder.R")
+      ))
+    }
+    
+    build_observation_type_buttons(values$selected_resident$Level)
+  })
+  
+  # Add observation type subtitle
+  output$obs_type_subtitle <- renderUI({
+    req(input$ass_obs_type)
+    
+    if (!exists("get_obs_type_description")) {
+      return(p("Observation evaluation selected", style = "margin: 0; opacity: 0.9; font-weight: 500;"))
+    }
+    
+    obs_desc <- get_obs_type_description(input$ass_obs_type)
+    p(paste("Selected observation:", obs_desc), 
+      style = "margin: 0; opacity: 0.9; font-weight: 500;")
+  })
+  
+  # Handle manual observation type selection
+  observeEvent(input$obs_type_manually_selected, {
+    if (is.null(input$obs_type_manually_selected)) return()
+    
+    selection_data <- input$obs_type_manually_selected
+    
+    cat("=== OBSERVATION TYPE MANUALLY SELECTED ===\n")
+    cat("Type:", selection_data$type, "\n")
+    cat("Name:", selection_data$name, "\n")
+    
+    # Store selection info for validation/submission
+    values$obs_type_selection_info <- selection_data
+    
+    # Show notification
+    showNotification(
+      paste("✅ Starting observation evaluation for:", selection_data$name),
+      type = "default",
+      duration = 3
+    )
+  })
+  
+  # Build dynamic questions based on observation type
+  output$obs_dynamic_questions <- renderUI({
+    req(input$ass_obs_type)
+    
+    cat("=== BUILDING OBSERVATION DYNAMIC QUESTIONS ===\n")
+    cat("Observation type:", input$ass_obs_type, "\n")
+    
+    # Check if helper functions exist
+    if (!exists("get_obs_fields_for_type")) {
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Function Missing", style = "color: #721c24;"),
+        p("get_obs_fields_for_type function not found in evaluation_form_builder.R")
+      ))
+    }
+    
+    # Get field names for this observation type
+    field_names <- get_obs_fields_for_type(input$ass_obs_type)
+    
+    cat("📋 Found", length(field_names), "fields:", paste(field_names, collapse = ", "), "\n")
+    
+    if (length(field_names) == 0) {
+      return(div(
+        style = "padding: 1rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; text-align: center;",
+        h6("No Questions Available", style = "color: #856404;"),
+        p("No evaluation questions found for this observation type.")
+      ))
+    }
+    
+    # Get the relevant fields from the data dictionary
+    if (!exists("rdm_dict") || is.null(rdm_dict)) {
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Configuration Error", style = "color: #721c24;"),
+        p("Data dictionary not available.")
+      ))
+    }
+    
+    # Build questions from data dictionary
+    question_fields <- rdm_dict %>%
+      filter(form_name == "assessment") %>%
+      filter(field_name %in% field_names) %>%
+      arrange(match(field_name, field_names))  # Preserve order
+    
+    cat("📝 Found", nrow(question_fields), "questions in data dictionary\n")
+    
+    if (nrow(question_fields) == 0) {
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Questions Not Found", style = "color: #721c24;"),
+        p("The expected question fields were not found in the data dictionary."),
+        p("Expected fields:", paste(field_names, collapse = ", "))
+      ))
+    }
+    
+    # Special handling for Clinical Decision Making (text field)
+    if (input$ass_obs_type == "1") {
+      # Clinical Decision Making uses a text area
+      cdm_field <- question_fields[question_fields$field_name == "ass_obs_cdm", ]
+      if (nrow(cdm_field) > 0) {
+        return(
+          div(class = "eval-field-group",
+              tags$label(cdm_field$field_label, class = "eval-field-label required"),
+              div(class = "textarea-container",
+                  tags$textarea(
+                    id = "ass_obs_cdm",
+                    class = "form-control eval-textarea",
+                    placeholder = "Describe the clinical decision making process observed...",
+                    rows = "4"
+                  ),
+                  conditionalPanel(
+                    condition = "window.location.protocol === 'https:'",
+                    tags$button(
+                      type = "button",
+                      class = "btn btn-outline-secondary speech-btn",
+                      onclick = "startSpeechRecognition('ass_obs_cdm')",
+                      title = "Click to use voice input",
+                      style = "position: absolute; right: 10px; top: 10px; padding: 5px 10px;",
+                      "🎤"
+                    )
+                  )
+              ),
+              div(class = "eval-field-help", "Provide detailed observations of the resident's clinical reasoning.")
+          )
+        )
+      }
+    }
+    
+    # For all other observation types, build standard fields
+    if (!exists("build_radio_field_from_dict") || !exists("build_dropdown_field_from_dict")) {
+      return(div(
+        style = "padding: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; text-align: center;",
+        h6("Function Missing", style = "color: #721c24;"),
+        p("Form building functions not found in evaluation_form_builder.R")
+      ))
+    }
+    
+    question_elements <- lapply(1:nrow(question_fields), function(i) {
+      field_row <- question_fields[i, ]
+      cat("Building question", i, ":", field_row$field_name, "\n")
+      
+      # Build field based on type
+      if (field_row$field_type == "radio") {
+        build_radio_field_from_dict(field_row, required = TRUE)
+      } else if (field_row$field_type == "dropdown") {
+        build_dropdown_field_from_dict(field_row, required = TRUE)
+      } else if (field_row$field_type == "text") {
+        # Text area for text fields
+        div(class = "eval-field-group",
+            tags$label(field_row$field_label, class = "eval-field-label required"),
+            div(class = "textarea-container",
+                tags$textarea(
+                  id = field_row$field_name,
+                  class = "form-control eval-textarea",
+                  placeholder = paste("Enter", tolower(field_row$field_label), "..."),
+                  rows = "3"
+                ),
+                conditionalPanel(
+                  condition = "window.location.protocol === 'https:'",
+                  tags$button(
+                    type = "button",
+                    class = "btn btn-outline-secondary speech-btn",
+                    onclick = paste0("startSpeechRecognition('", field_row$field_name, "')"),
+                    title = "Click to use voice input",
+                    style = "position: absolute; right: 10px; top: 10px; padding: 5px 10px;",
+                    "🎤"
+                  )
+                )
+            )
+        )
+      } else {
+        # Default to text input for other types
+        div(class = "eval-field-group",
+            tags$label(field_row$field_label, class = "eval-field-label required"),
+            textInput(
+              field_row$field_name,
+              label = NULL,
+              placeholder = paste("Enter", tolower(field_row$field_label), "...")
+            )
+        )
+      }
+    })
+    
+    cat("✅ Built", length(question_elements), "question elements\n")
+    
+    # Return the question elements
+    tagList(question_elements)
+  })
+  
+  # Handle observation evaluation submission
+  observeEvent(input$submit_observation_evaluation, {
+    cat("=== SUBMITTING OBSERVATION EVALUATION ===\n")
+    
+    if (!exists("validate_observation_form")) {
+      showNotification("Validation function not found. Please check your form builder functions.", 
+                       type = "error", duration = 5)
+      return()
+    }
+    
+    missing_fields <- validate_observation_form(input)
+    
+    if (length(missing_fields) > 0) {
+      cat("Validation failed. Missing fields:", paste(missing_fields, collapse = ", "), "\n")
+      showNotification(
+        paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
+        type = "error",
+        duration = 5
+      )
+      return()
+    }
+    
+    cat("Form validation passed\n")
+    
+    if (!exists("collect_observation_data")) {
+      showNotification("Data collection function not found. Please check your form builder functions.", 
+                       type = "error", duration = 5)
+      return()
+    }
+    
+    eval_data <- collect_observation_data(input, values$selected_faculty, values$selected_resident)
+    
+    cat("Observation evaluation data collected:\n")
+    print(eval_data)
+    
+    tryCatch({
+      if (!exists("submit_evaluation_data")) {
+        showNotification("Submission function not found. Please check your evaluation helper functions.", 
+                         type = "error", duration = 5)
+        return()
+      }
+      
+      result <- submit_evaluation_data(
+        eval_data = eval_data,
+        eval_type = "obs",
+        resident_id = values$selected_resident$record_id,
+        token = if(exists("rdm_token")) rdm_token else NULL,
+        url = if(exists("url")) url else NULL
+      )
+      
+      cat("Submission successful:", result, "\n")
+      
+      # Get observation type description for notification
+      obs_desc <- if (exists("get_obs_type_description")) {
+        get_obs_type_description(input$ass_obs_type)
+      } else {
+        paste("Observation Type", input$ass_obs_type)
+      }
+      
+      showNotification(
+        paste0("✅ Observation evaluation submitted successfully! (", obs_desc, ")"),
+        type = "default",
+        duration = 5
+      )
+      
+      # Reset to start
+      values$selected_faculty <- NULL
+      values$selected_resident <- NULL
+      values$selected_eval_type <- NULL
+      values$current_step <- "faculty"
+      
+      updateTextInput(session, "faculty_search", value = "")
+      updateTextInput(session, "resident_search", value = "")
+      
+    }, error = function(e) {
+      cat("Error submitting observation evaluation:", e$message, "\n")
+      showNotification(
+        paste("❌ Error submitting evaluation:", e$message),
+        type = "error",
+        duration = 8
+      )
+    })
+  })
   
   # ============================================================================
-  # EVALUATION SUBMISSION HANDLERS
+  # OTHER EVALUATION SUBMISSION HANDLERS
   # ============================================================================
   
   # Generic submission handler function
   handle_evaluation_submission <- function(eval_type, validate_func, collect_func) {
     cat("=== SUBMITTING", toupper(eval_type), "EVALUATION ===\n")
-    
-    if (!exists("validate_single_day_clinic_form")) {
-      showNotification("Validation function not found. Please check your form builder functions.", 
-                       type = "error", duration = 5)
-      return()
-    }
     
     missing_fields <- validate_func(input)
     
@@ -845,24 +1095,12 @@ server <- function(input, output, session) {
     
     cat("Form validation passed\n")
     
-    if (!exists("collect_single_day_clinic_data")) {
-      showNotification("Data collection function not found. Please check your form builder functions.", 
-                       type = "error", duration = 5)
-      return()
-    }
-    
     eval_data <- collect_func(input, values$selected_faculty, values$selected_resident)
     
     cat("Evaluation data collected:\n")
     print(eval_data)
     
     tryCatch({
-      if (!exists("submit_evaluation_data")) {
-        showNotification("Submission function not found. Please check your evaluation helper functions.", 
-                         type = "error", duration = 5)
-        return()
-      }
-      
       result <- submit_evaluation_data(
         eval_data = eval_data,
         eval_type = eval_type,
@@ -909,23 +1147,43 @@ server <- function(input, output, session) {
   
   # Individual submission handlers
   observeEvent(input$submit_single_day_evaluation, {
-    handle_evaluation_submission("day", validate_single_day_clinic_form, collect_single_day_clinic_data)
+    if (exists("validate_single_day_clinic_form") && exists("collect_single_day_clinic_data")) {
+      handle_evaluation_submission("day", validate_single_day_clinic_form, collect_single_day_clinic_data)
+    } else {
+      showNotification("Single day clinic functions not found.", type = "error", duration = 5)
+    }
   })
   
   observeEvent(input$submit_consultation_evaluation, {
-    handle_evaluation_submission("cons", validate_consultation_form, collect_consultation_data)
+    if (exists("validate_consultation_form") && exists("collect_consultation_data")) {
+      handle_evaluation_submission("cons", validate_consultation_form, collect_consultation_data)
+    } else {
+      showNotification("Consultation functions not found.", type = "error", duration = 5)
+    }
   })
   
   observeEvent(input$submit_bridge_evaluation, {
-    handle_evaluation_submission("bridge", validate_bridge_clinic_form, collect_bridge_clinic_data)
+    if (exists("validate_bridge_clinic_form") && exists("collect_bridge_clinic_data")) {
+      handle_evaluation_submission("bridge", validate_bridge_clinic_form, collect_bridge_clinic_data)
+    } else {
+      showNotification("Bridge clinic functions not found.", type = "error", duration = 5)
+    }
   })
   
   observeEvent(input$submit_intern_inpatient_evaluation, {
-    handle_evaluation_submission("int_ip", validate_intern_inpatient_form, collect_intern_inpatient_data)
+    if (exists("validate_intern_inpatient_form") && exists("collect_intern_inpatient_data")) {
+      handle_evaluation_submission("int_ip", validate_intern_inpatient_form, collect_intern_inpatient_data)
+    } else {
+      showNotification("Intern inpatient functions not found.", type = "error", duration = 5)
+    }
   })
   
   observeEvent(input$submit_senior_inpatient_evaluation, {
-    handle_evaluation_submission("res_ip", validate_senior_inpatient_form, collect_senior_inpatient_data)
+    if (exists("validate_senior_inpatient_form") && exists("collect_senior_inpatient_data")) {
+      handle_evaluation_submission("res_ip", validate_senior_inpatient_form, collect_senior_inpatient_data)
+    } else {
+      showNotification("Senior inpatient functions not found.", type = "error", duration = 5)
+    }
   })
   
   # Generic submission for unimplemented forms
@@ -934,7 +1192,7 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # MODAL AND FACULTY ADDITION
+  # FACULTY MODAL AND ADDITION
   # ============================================================================
   
   observeEvent(input$show_add_faculty_modal, {
@@ -1097,33 +1355,4 @@ server <- function(input, output, session) {
                        type = "error", duration = 8)
     })
   })
-}
-
-build_cc_completion_reactable <- function(resident_name, resident_level) {
-  tryCatch({
-    # This would require the create_cc_table function to be adapted
-    # For now, we'll use the simpler grid approach above
-    
-    completion_data <- get_cc_completion_status(resident_name, resident_level)
-    
-    if (is.null(completion_data)) {
-      return(div(
-        style = "padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; color: #666;",
-        "📊 Completion status not available"
-      ))
-    }
-    
-    # Convert to format expected by create_cc_table if you want to use that function
-    # This would require adapting your existing create_cc_table function
-    
-    return(div("Reactable version would go here"))
-    
-  }, error = function(e) {
-    return(div(
-      style = "padding: 1rem; background: #ffebee; border-radius: 8px; text-align: center; color: #c62828;",
-      "⚠️ Error loading completion status"
-    ))
-  })
-  
-  
 }

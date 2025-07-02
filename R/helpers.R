@@ -622,7 +622,7 @@ get_field_name <- function(data, preferred_fields) {
 # Add this function to your server.R (or helpers.R)
 get_cc_completion_status <- function(resident_name, resident_level) {
   tryCatch({
-    cat("=== FIXED REDCAP QUERY: Getting CC completion status ===\n")
+    cat("=== Getting CC completion status with academic year check ===\n")
     cat("Resident:", resident_name, "Level:", resident_level, "\n")
     
     # Check if we have the necessary REDCap credentials
@@ -649,7 +649,19 @@ get_cc_completion_status <- function(resident_name, resident_level) {
     resident_id <- resident_record$record_id
     cat("✅ Found resident ID:", resident_id, "\n")
     
-    # Query REDCap for assessment records for this resident
+    # Get current academic year (July 1 - June 30)
+    current_date <- Sys.Date()
+    current_calendar_year <- as.numeric(format(current_date, "%Y"))
+    academic_year_start <- if (format(current_date, "%m-%d") >= "07-01") {
+      current_calendar_year
+    } else {
+      current_calendar_year - 1
+    }
+    academic_year_end <- academic_year_start + 1
+    
+    cat("📅 Current academic year:", academic_year_start, "-", academic_year_end, "\n")
+    
+    # Query REDCap for assessment records for this resident in current academic year
     cat("📡 Querying REDCap for assessment data...\n")
     
     response <- httr::POST(
@@ -690,24 +702,26 @@ get_cc_completion_status <- function(resident_name, resident_level) {
       return(create_empty_completion_status())
     }
     
-    # FIXED: Better filtering logic
-    # Look for records where ass_cc_quart has a value and is not empty
+    # Filter for CC evaluations in current academic year
     has_cc_quarter <- !is.na(assessment_data$ass_cc_quart) & 
       assessment_data$ass_cc_quart != "" & 
       assessment_data$ass_cc_quart %in% c("1", "2", "3", "4")
     
-    cc_evaluations <- assessment_data[has_cc_quarter, ]
+    # Filter by academic year
+    assessment_data$ass_date_parsed <- as.Date(assessment_data$ass_date)
+    academic_year_start_date <- as.Date(paste0(academic_year_start, "-07-01"))
+    academic_year_end_date <- as.Date(paste0(academic_year_end, "-06-30"))
     
-    cat("🎯 Found", nrow(cc_evaluations), "CC evaluations\n")
+    in_current_academic_year <- !is.na(assessment_data$ass_date_parsed) &
+      assessment_data$ass_date_parsed >= academic_year_start_date &
+      assessment_data$ass_date_parsed <= academic_year_end_date
     
-    if (nrow(cc_evaluations) > 0) {
-      cat("📝 CC evaluation quarters found:", paste(cc_evaluations$ass_cc_quart, collapse = ", "), "\n")
-      
-      # Debug: show CC evaluation data
-      for (i in 1:nrow(cc_evaluations)) {
-        eval_row <- cc_evaluations[i, ]
-        cat("   - Quarter", eval_row$ass_cc_quart, "by", eval_row$ass_faculty, "on", eval_row$ass_date, "\n")
-      }
+    cc_evaluations_this_year <- assessment_data[has_cc_quarter & in_current_academic_year, ]
+    
+    cat("🎯 Found", nrow(cc_evaluations_this_year), "CC evaluations in current academic year\n")
+    
+    if (nrow(cc_evaluations_this_year) > 0) {
+      cat("📝 CC evaluation quarters found this year:", paste(cc_evaluations_this_year$ass_cc_quart, collapse = ", "), "\n")
     }
     
     # Create completion status for all 4 quarters
@@ -723,23 +737,22 @@ get_cc_completion_status <- function(resident_name, resident_level) {
       quarter = quarters,
       quarter_label = quarter_labels[quarters],
       completed = sapply(quarters, function(q) {
-        completed <- any(cc_evaluations$ass_cc_quart == q, na.rm = TRUE)
-        cat("📊 Quarter", q, "completed:", completed, "\n")
+        completed <- any(cc_evaluations_this_year$ass_cc_quart == q, na.rm = TRUE)
+        cat("📊 Quarter", q, "completed this academic year:", completed, "\n")
         return(completed)
       }),
       evaluator = sapply(quarters, function(q) {
-        matching_evals <- cc_evaluations[cc_evaluations$ass_cc_quart == q & !is.na(cc_evaluations$ass_cc_quart), ]
+        matching_evals <- cc_evaluations_this_year[cc_evaluations_this_year$ass_cc_quart == q & !is.na(cc_evaluations_this_year$ass_cc_quart), ]
         if (nrow(matching_evals) > 0) {
           evaluator <- matching_evals$ass_faculty[1]
           if (!is.na(evaluator) && evaluator != "") {
-            cat("👨‍⚕️ Quarter", q, "evaluator:", evaluator, "\n")
             return(evaluator)
           }
         }
         return(NA_character_)
       }),
       evaluation_date = sapply(quarters, function(q) {
-        matching_evals <- cc_evaluations[cc_evaluations$ass_cc_quart == q & !is.na(cc_evaluations$ass_cc_quart), ]
+        matching_evals <- cc_evaluations_this_year[cc_evaluations_this_year$ass_cc_quart == q & !is.na(cc_evaluations_this_year$ass_cc_quart), ]
         if (nrow(matching_evals) > 0) {
           eval_date <- matching_evals$ass_date[1]
           if (!is.na(eval_date) && eval_date != "") {
@@ -752,7 +765,7 @@ get_cc_completion_status <- function(resident_name, resident_level) {
     )
     
     cat("✅ Completion status created successfully\n")
-    cat("📊 Summary: ", sum(completion_data$completed), "out of 4 quarters completed\n")
+    cat("📊 Summary: ", sum(completion_data$completed), "out of 4 quarters completed this academic year\n")
     
     return(completion_data)
     
@@ -760,6 +773,123 @@ get_cc_completion_status <- function(resident_name, resident_level) {
     cat("❌ Error in get_cc_completion_status:", e$message, "\n")
     return(create_empty_completion_status())
   })
+}
+
+# Build clickable quarter selection table
+build_clickable_quarter_table <- function(completion_data) {
+  if (is.null(completion_data) || nrow(completion_data) == 0) {
+    return(div(
+      style = "padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; color: #666; border: 1px dashed #dee2e6;",
+      "📊 No completion data available"
+    ))
+  }
+  
+  div(
+    class = "cc-completion-status",
+    style = "margin-bottom: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #17a2b8;",
+    h6("📊 Select Quarter to Evaluate", style = "margin-bottom: 0.5rem; color: #17a2b8; font-weight: 600;"),
+    p("Click on any quarter to start that evaluation:", style = "margin-bottom: 1rem; font-size: 0.9rem; color: #666;"),
+    div(class = "completion-grid", style = "display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;",
+        lapply(1:nrow(completion_data), function(i) {
+          row <- completion_data[i, ]
+          is_completed <- row$completed
+          status_icon <- if (is_completed) "✅" else "⭕"
+          
+          # Build evaluator and date text
+          detail_text <- ""
+          if (is_completed && !is.na(row$evaluator)) {
+            detail_text <- paste("by", row$evaluator)
+            if (!is.na(row$evaluation_date)) {
+              formatted_date <- tryCatch({
+                date_obj <- as.Date(row$evaluation_date)
+                format(date_obj, "%m/%d/%Y")
+              }, error = function(e) row$evaluation_date)
+              detail_text <- paste0(detail_text, " (", formatted_date, ")")
+            }
+          }
+          
+          # Create the clickable quarter card
+          if (is_completed) {
+            # Completed quarter - show as completed but allow override
+            div(
+              class = "completion-item completed clickable-quarter",
+              style = paste0(
+                "padding: 0.75rem; border-radius: 8px; text-align: center; cursor: pointer; ",
+                "background: #d4edda; border: 2px solid #c3e6cb; color: #155724; ",
+                "transition: all 0.2s ease; position: relative;"
+              ),
+              onclick = paste0("selectQuarter('", row$quarter, "', '", row$quarter_label, "', true)"),
+              div(style = "font-weight: 600; margin-bottom: 0.5rem; font-size: 1rem;", paste(status_icon, row$quarter_label)),
+              div(style = "font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;", "Completed This Year"),
+              if (detail_text != "") {
+                div(style = "font-size: 0.75rem; margin-bottom: 0.75rem; opacity: 0.8; font-style: italic;", detail_text)
+              },
+              div(style = "font-size: 0.7rem; opacity: 0.7; background: rgba(255,255,255,0.3); padding: 0.25rem; border-radius: 4px;", 
+                  "⚠️ Click to re-evaluate")
+            )
+          } else {
+            # Pending quarter - ready to start
+            div(
+              class = "completion-item pending clickable-quarter",
+              style = paste0(
+                "padding: 0.75rem; border-radius: 8px; text-align: center; cursor: pointer; ",
+                "background: #fff3cd; border: 2px solid #ffeaa7; color: #856404; ",
+                "transition: all 0.2s ease; position: relative;"
+              ),
+              onclick = paste0("selectQuarter('", row$quarter, "', '", row$quarter_label, "', false)"),
+              div(style = "font-weight: 600; margin-bottom: 0.5rem; font-size: 1rem;", paste(status_icon, row$quarter_label)),
+              div(style = "font-size: 0.85rem; font-weight: 500; margin-bottom: 0.75rem;", "Ready to Start"),
+              div(style = "font-size: 0.8rem; background: rgba(255,255,255,0.5); padding: 0.5rem; border-radius: 4px; font-weight: 600;", 
+                  "▶️ Click to Begin")
+            )
+          }
+        })
+    ),
+    
+    # JavaScript for quarter selection
+    tags$script(HTML("
+      function selectQuarter(quarter, quarterLabel, isCompleted) {
+        console.log('Selecting quarter:', quarter, quarterLabel, 'Completed:', isCompleted);
+        
+        // Show confirmation if already completed
+        if (isCompleted) {
+          var confirmMsg = 'This quarter (' + quarterLabel + ') has already been completed this academic year. Are you sure you want to create another evaluation?';
+          if (!confirm(confirmMsg)) {
+            return;
+          }
+        }
+        
+        // Set the quarter value (this will trigger conditional panels to show)
+        Shiny.setInputValue('ass_cc_quart', quarter, {priority: 'event'});
+        
+        // Also set a flag for the server to know this was manually selected
+        Shiny.setInputValue('cc_quarter_manually_selected', {
+          quarter: quarter,
+          label: quarterLabel,
+          isCompleted: isCompleted,
+          timestamp: new Date().getTime()
+        }, {priority: 'event'});
+        
+        // Scroll to the next section after a brief delay
+        setTimeout(function() {
+          var nextSection = document.querySelector('.eval-section:nth-child(2)');
+          if (nextSection) {
+            nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 200);
+        
+        // Visual feedback
+        document.querySelectorAll('.clickable-quarter').forEach(function(el) {
+          el.style.transform = '';
+          el.style.boxShadow = '';
+        });
+        
+        // Highlight selected quarter
+        event.currentTarget.style.transform = 'scale(1.02)';
+        event.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+      }
+    "))
+  )
 }
 
 
