@@ -2,6 +2,7 @@
 
 server <- function(input, output, session) {
   
+  
   # Reactive values to track app state
   values <- reactiveValues(
     selected_faculty = NULL,
@@ -9,8 +10,53 @@ server <- function(input, output, session) {
     selected_eval_type = NULL,
     current_search_results = NULL,
     current_resident_results = NULL,
-    current_step = "faculty"
+    current_step = "intro"  # Start with intro page
   )
+  
+  # ... existing helper function ...
+  
+  # Manage current step display
+  output$current_step <- reactive({
+    values$current_step
+  })
+  outputOptions(output, "current_step", suspendWhenHidden = FALSE)
+  
+  # ============================================================================
+  # INTRO PAGE HANDLER
+  # ============================================================================
+  
+  observeEvent(input$begin_evaluation, {
+    values$current_step <- "faculty"
+    showNotification("Welcome! Please search for your name to begin.", type = "default", duration = 3)
+  })
+  
+  # ============================================================================
+  # NAVIGATION BETWEEN STEPS (updated to include intro)
+  # ============================================================================
+  
+  observeEvent(input$back_to_faculty, {
+    values$current_step <- "faculty"
+    values$selected_resident <- NULL
+    values$selected_eval_type <- NULL
+    updateTextInput(session, "resident_search", value = "")
+  })
+  
+  observeEvent(input$back_to_resident, {
+    values$current_step <- "resident"
+    values$selected_eval_type <- NULL
+  })
+  
+  observeEvent(input$start_over, {
+    values$selected_faculty <- NULL
+    values$selected_resident <- NULL
+    values$selected_eval_type <- NULL
+    values$current_search_results <- NULL
+    values$current_resident_results <- NULL
+    values$current_step <- "intro"  # Go back to intro page
+    
+    updateTextInput(session, "faculty_search", value = "")
+    updateTextInput(session, "resident_search", value = "")
+  })
   
   # Helper function to get field name safely
   get_field_name <- function(data, preferred_fields) {

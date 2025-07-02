@@ -299,37 +299,19 @@ get_next_eval_instance <- function(resident_id, eval_type, token, url) {
   })
 }
 
-# Submit evaluation data to REDCap
 submit_evaluation_data <- function(eval_data, eval_type, resident_id, token, url) {
   tryCatch({
-    cat("=== SUBMITTING EVALUATION DATA ===\n")
+    cat("=== SUBMITTING EVALUATION DATA TO ASSESSMENT FORM ===\n")
     cat("Evaluation type:", eval_type, "\n")
     cat("Resident ID:", resident_id, "\n")
     
-    # Map evaluation type to REDCap instrument name
-    instrument_map <- list(
-      "cc" = "continuity_clinic_evaluation",
-      "obs" = "observation_evaluation", 
-      "int_ip" = "intern_inpatient_evaluation",
-      "res_ip" = "senior_inpatient_evaluation",
-      "bridge" = "bridge_clinic_evaluation",
-      "cons" = "consultation_evaluation",
-      "day" = "single_day_clinic_evaluation"
-    )
+    # Get next instance for assessment form
+    next_instance <- 1  # Simple for now
     
-    instrument_name <- instrument_map[[eval_type]]
-    
-    if (is.null(instrument_name)) {
-      stop("Unknown evaluation type: ", eval_type)
-    }
-    
-    # Get next instance number
-    next_instance <- get_next_eval_instance(resident_id, eval_type, token, url)
-    
-    # Prepare REDCap data
+    # Prepare REDCap data for ASSESSMENT FORM (where all eval fields exist)
     redcap_data <- data.frame(
       record_id = as.character(resident_id),
-      redcap_repeat_instrument = instrument_name,
+      redcap_repeat_instrument = "assessment",  # The actual REDCap form
       redcap_repeat_instance = as.character(next_instance),
       stringsAsFactors = FALSE
     )
@@ -339,9 +321,8 @@ submit_evaluation_data <- function(eval_data, eval_type, resident_id, token, url
       redcap_data[[field_name]] <- eval_data[[field_name]]
     }
     
-    # Add completion status (2 = Complete)
-    completion_field <- paste0(gsub("_evaluation$", "", instrument_name), "_complete")
-    redcap_data[[completion_field]] <- "2"
+    # Add completion status for assessment form
+    redcap_data[["assessment_complete"]] <- "2"
     
     cat("Final REDCap submission data:\n")
     print(redcap_data)

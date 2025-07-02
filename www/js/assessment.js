@@ -1,4 +1,4 @@
-// faculty-app.js - SSM Health Faculty Evaluation System
+// faculty-app.js - SSM Health Faculty Evaluation System (Updated with Speech Recognition)
 
 // Enhanced validation and modal handling
 Shiny.addCustomMessageHandler('showValidationWarning', function(data) {
@@ -158,5 +158,154 @@ function setButtonLoading(buttonId, isLoading) {
   }
 }
 
+// ============================================================================
+// SPEECH-TO-TEXT FUNCTIONALITY
+// ============================================================================
+
+// Check if browser supports speech recognition
+function speechRecognitionSupported() {
+  return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+}
+
+// Initialize speech recognition for a specific textarea
+function startSpeechRecognition(textareaId) {
+  if (!speechRecognitionSupported()) {
+    alert('Speech recognition is not supported in your browser. Please try using Chrome, Edge, or Safari.');
+    return;
+  }
+  
+  var textarea = document.getElementById(textareaId);
+  if (!textarea) {
+    console.error('Textarea not found:', textareaId);
+    return;
+  }
+  
+  // Create speech recognition instance
+  var SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+  var recognition = new SpeechRecognition();
+  
+  // Configure recognition
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  
+  // Find the speech button for this textarea
+  var speechBtn = textarea.parentNode.querySelector('.speech-btn');
+  
+  // Update UI to show recording state
+  if (speechBtn) {
+    speechBtn.innerHTML = '🔴';
+    speechBtn.title = 'Recording... Click to stop';
+    speechBtn.style.background = '#ffebee';
+    speechBtn.style.borderColor = '#f44336';
+  }
+  
+  // Store original text to preserve existing content
+  var originalText = textarea.value;
+  var finalTranscript = '';
+  var interimTranscript = '';
+  
+  recognition.onresult = function(event) {
+    interimTranscript = '';
+    finalTranscript = '';
+    
+    for (var i = event.resultIndex; i < event.results.length; i++) {
+      var transcript = event.results[i][0].transcript;
+      
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript + ' ';
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+    
+    // Update textarea with combined text
+    var newText = originalText;
+    if (originalText && !originalText.endsWith(' ')) {
+      newText += ' ';
+    }
+    newText += finalTranscript + interimTranscript;
+    
+    textarea.value = newText;
+    
+    // Trigger Shiny input update
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  
+  recognition.onerror = function(event) {
+    console.error('Speech recognition error:', event.error);
+    
+    // Reset button state
+    if (speechBtn) {
+      speechBtn.innerHTML = '🎤';
+      speechBtn.title = 'Click to use voice input';
+      speechBtn.style.background = '';
+      speechBtn.style.borderColor = '';
+    }
+    
+    if (event.error === 'not-allowed') {
+      alert('Microphone access was denied. Please allow microphone access and try again.');
+    } else if (event.error === 'no-speech') {
+      alert('No speech was detected. Please try again.');
+    } else {
+      alert('Speech recognition error: ' + event.error);
+    }
+  };
+  
+  recognition.onend = function() {
+    // Update original text with final result
+    originalText = textarea.value;
+    
+    // Reset button state
+    if (speechBtn) {
+      speechBtn.innerHTML = '🎤';
+      speechBtn.title = 'Click to use voice input';
+      speechBtn.style.background = '';
+      speechBtn.style.borderColor = '';
+    }
+  };
+  
+  // Add click handler to stop recording
+  if (speechBtn) {
+    speechBtn.onclick = function() {
+      if (recognition) {
+        recognition.stop();
+      }
+    };
+  }
+  
+  // Start recognition
+  try {
+    recognition.start();
+  } catch (error) {
+    console.error('Failed to start speech recognition:', error);
+    // Reset button state
+    if (speechBtn) {
+      speechBtn.innerHTML = '🎤';
+      speechBtn.title = 'Click to use voice input';
+      speechBtn.style.background = '';
+      speechBtn.style.borderColor = '';
+    }
+  }
+}
+
+// Initialize speech recognition buttons when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  // Check for speech recognition support and show/hide buttons accordingly
+  if (!speechRecognitionSupported()) {
+    console.log('Speech recognition not supported, hiding speech buttons');
+    // Hide all speech buttons if not supported
+    setTimeout(function() {
+      var speechBtns = document.querySelectorAll('.speech-btn');
+      speechBtns.forEach(function(btn) {
+        btn.style.display = 'none';
+      });
+    }, 1000);
+  } else {
+    console.log('Speech recognition supported');
+  }
+});
+
 // Console logging for debugging (can be removed in production)
 console.log('Faculty Evaluation App JavaScript loaded successfully');
+console.log('Speech recognition supported:', speechRecognitionSupported());

@@ -1,4 +1,4 @@
-# global.R - Faculty Evaluation App (Updated with Evaluation Helpers)
+# global.R - Faculty Evaluation App (Fixed Vector Length Warning)
 
 # ============================================================================
 # LIBRARIES
@@ -237,12 +237,24 @@ if (!is.null(resident_data)) {
 if (!is.null(rdm_dict)) {
   cat("Evaluation dictionary loaded successfully\n")
   
-  # Show breakdown by evaluation type for assessment form
+  # Show breakdown by evaluation type for assessment form (FIXED VERSION)
   assessment_fields <- rdm_dict[rdm_dict$form_name == "assessment", ]
   if (nrow(assessment_fields) > 0) {
     # Extract evaluation types from field names
-    eval_types <- unique(sub("^ass_([^_]+)_.*", "\\1", assessment_fields$field_name))
-    eval_types <- eval_types[eval_types != assessment_fields$field_name]  # Remove non-matching
-    cat("Assessment evaluation types found:", paste(eval_types, collapse = ", "), "\n")
+    all_field_names <- assessment_fields$field_name
+    
+    # Extract the pattern between "ass_" and the next "_"
+    eval_type_matches <- regmatches(all_field_names, regexpr("^ass_([^_]+)", all_field_names))
+    
+    # Remove the "ass_" prefix to get just the evaluation type
+    eval_types_raw <- gsub("^ass_", "", eval_type_matches)
+    
+    # Only keep matches that actually found a pattern (remove empty/NA values)
+    eval_types_clean <- eval_types_raw[eval_types_raw != "" & !is.na(eval_types_raw)]
+    
+    # Get unique evaluation types
+    eval_types_unique <- unique(eval_types_clean)
+    
+    cat("Assessment evaluation types found:", paste(eval_types_unique, collapse = ", "), "\n")
   }
 }
