@@ -26,55 +26,25 @@ ui <- page_fluid(
       # Intro Page (Step 0)
       conditionalPanel(
         condition = "output.current_step == 'intro'",
-        div(class = "intro-page",
-            div(class = "intro-card",
-                div(class = "intro-header",
-                    div(class = "intro-icon", "👩‍⚕️👨‍⚕️"),
-                    h1("IMSLU Evaluation of Residents by Faculty and Fellows", 
-                       class = "intro-title"),
-                    div(class = "intro-subtitle", "SSM / SLUH Internal Medicine Residency Program")
+        div(class = "intro-page-mobile",
+            div(class = "intro-card-mobile",
+                div(class = "intro-header-mobile",
+                    h2("IMSLU Evaluation", class = "intro-title-mobile"),
+                    div(class = "intro-subtitle-mobile", "Faculty & Fellow Evaluation System")
                 ),
                 
-                div(class = "intro-content",
-                    div(class = "intro-section",
-                        div(class = "intro-text",
-                            p("This form is only intended for Faculty and Fellows working with Residents and Rotators for the SSM / SLUH Internal Medicine Residency Program."),
-                            
-                            p("If you have not used this form before, we ask that you take a moment in the next page to accurately fill out your personal information so that we may provide you access to your own evaluation data."),
-                            
-                            p("This application is meant to be easy to use and intuitive and undergoing beta testing. We would love to have your feedback!")
-                        )
-                    ),
+                div(class = "intro-content-mobile",
+                    p("This form is for Faculty and Fellows evaluating residents in the SSM / SLUH Internal Medicine Residency Program."),
                     
-                    div(class = "intro-features",
-                        h5("What you can do:", class = "features-title"),
-                        div(class = "feature-grid",
-                            div(class = "feature-item",
-                                div(class = "feature-icon", "📝"),
-                                div(class = "feature-text", "Complete resident evaluations quickly and efficiently")
-                            ),
-                            div(class = "feature-item",
-                                div(class = "feature-icon", "🎯"),
-                                div(class = "feature-text", "Provide targeted feedback with Plus/Delta structure")
-                            ),
-                            div(class = "feature-item",
-                                div(class = "feature-icon", "📊"),
-                                div(class = "feature-text", "Access evaluation-specific questions based on your specialty")
-                            ),
-                            div(class = "feature-item",
-                                div(class = "feature-icon", "💾"),
-                                div(class = "feature-text", "Securely submit evaluations directly to REDCap")
-                            )
-                        )
+                    p("If you haven't used this form before, you'll be able to add your information on the next step."),
+                    
+                    div(class = "intro-footer-mobile",
+                        actionButton("begin_evaluation", "Begin Evaluation", 
+                                     class = "btn btn-primary btn-lg intro-btn-mobile"),
+                        br(), br(),
+                        div(class = "intro-note-mobile", 
+                            "For authorized faculty and fellows only.")
                     )
-                ),
-                
-                div(class = "intro-footer",
-                    actionButton("begin_evaluation", "Begin Evaluation Process →", 
-                                 class = "btn btn-primary btn-lg intro-btn"),
-                    br(), br(),
-                    div(class = "intro-note", 
-                        "By continuing, you acknowledge that you are authorized faculty or fellow for the SSM / SLUH Internal Medicine Residency Program.")
                 )
             )
         )

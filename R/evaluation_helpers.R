@@ -141,27 +141,44 @@ get_available_eval_types_by_division <- function(fac_div) {
   return(eval_codes)
 }
 
-# Filter evaluation types based on resident level
 filter_eval_types_by_resident_level <- function(eval_types, resident_level) {
+  cat("=== FILTERING EVAL TYPES BY RESIDENT LEVEL ===\n")
+  cat("Input eval_types:", paste(eval_types, collapse = ", "), "\n")
+  cat("Resident level:", resident_level, "\n")
+  
   filtered_types <- eval_types
   
-  # Remove level-specific evaluations based on resident level
+  # Apply level-specific filtering
   if (resident_level == "Intern") {
-    # Interns cannot do senior inpatient evaluations
+    # Interns CANNOT do senior inpatient evaluations
+    # Remove "res_ip" (senior inpatient) for interns
     filtered_types <- filtered_types[filtered_types != "res_ip"]
+    cat("Removed 'res_ip' (senior inpatient) for intern\n")
+    
   } else if (resident_level %in% c("PGY2", "PGY3")) {
-    # Senior residents cannot do intern-specific evaluations
-    # (but they can still do intern inpatient if they're supervising)
-    # For now, we'll keep both available
+    # Senior residents (PGY2/PGY3) CANNOT do intern-specific evaluations
+    # Remove "int_ip" (intern inpatient) for senior residents
+    filtered_types <- filtered_types[filtered_types != "int_ip"]
+    cat("Removed 'int_ip' (intern inpatient) for senior resident\n")
+    
   } else if (resident_level == "Rotator") {
     # Rotators can do most evaluations except continuity clinic
     filtered_types <- filtered_types[filtered_types != "cc"]
+    cat("Removed 'cc' (continuity clinic) for rotator\n")
+    
+    # Rotators can do both intern and senior inpatient evaluations
+    # (they might be at different levels from different programs)
+    cat("Rotators can do both int_ip and res_ip evaluations\n")
   }
+  
+  cat("Filtered eval_types:", paste(filtered_types, collapse = ", "), "\n")
+  cat("=== END FILTERING ===\n")
   
   return(filtered_types)
 }
 
-# Get evaluation type metadata for display
+# Also update the get_eval_type_display_info function to better handle level-specific tags:
+
 get_eval_type_display_info <- function(eval_type_id, resident_level = NULL) {
   all_types <- get_evaluation_types()
   
@@ -176,16 +193,18 @@ get_eval_type_display_info <- function(eval_type_id, resident_level = NULL) {
   
   if (eval_type_id == "int_ip") {
     tags <- c(tags, "Intern Level")
+    if (!is.null(resident_level) && resident_level %in% c("PGY2", "PGY3")) {
+      tags <- c(tags, "Supervising Interns")
+    }
   } else if (eval_type_id == "res_ip") {
     tags <- c(tags, "Senior Level")
+    if (!is.null(resident_level) && resident_level == "Intern") {
+      tags <- c(tags, "Not Available for Interns")
+    }
   } else if (eval_type_id == "cc") {
     tags <- c(tags, "Longitudinal")
-  }
-  
-  # Add resident level if provided
-  if (!is.null(resident_level)) {
-    if (eval_type_id == "int_ip" && resident_level != "Intern") {
-      tags <- c(tags, "Supervising")
+    if (!is.null(resident_level) && resident_level == "Rotator") {
+      tags <- c(tags, "Not Available for Rotators")
     }
   }
   
@@ -193,6 +212,33 @@ get_eval_type_display_info <- function(eval_type_id, resident_level = NULL) {
   
   return(eval_info)
 }
+
+# Debug function to test the filtering:
+debug_eval_filtering <- function(faculty_div, resident_level) {
+  cat("=== DEBUG EVAL FILTERING ===\n")
+  cat("Faculty division:", faculty_div, "\n")
+  cat("Resident level:", resident_level, "\n")
+  
+  # Get available types by division
+  available_types <- get_available_eval_types_by_division(faculty_div)
+  cat("Available by division:", paste(available_types, collapse = ", "), "\n")
+  
+  # Filter by resident level
+  filtered_types <- filter_eval_types_by_resident_level(available_types, resident_level)
+  cat("Final filtered types:", paste(filtered_types, collapse = ", "), "\n")
+  
+  # Show what was removed
+  removed_types <- setdiff(available_types, filtered_types)
+  if (length(removed_types) > 0) {
+    cat("Removed types:", paste(removed_types, collapse = ", "), "\n")
+  } else {
+    cat("No types removed\n")
+  }
+  
+  cat("=== END DEBUG ===\n")
+  return(filtered_types)
+}
+
 
 # Check if evaluation type is appropriate for resident level
 is_eval_appropriate_for_level <- function(eval_type_id, resident_level) {
