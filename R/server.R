@@ -1223,231 +1223,322 @@ server <- function(input, output, session) {
     }
   })
   
-  # Handle observation evaluation submission
-  observeEvent(input$submit_observation_evaluation, {
-    cat("=== SUBMITTING OBSERVATION EVALUATION ===\n")
+  # ============================================================================
+  # UNIVERSAL SMART REFRESH FUNCTIONS
+  # ============================================================================
+  
+  # Get all possible form field names that might exist
+  get_all_form_field_names <- function() {
+    c(
+      # Universal fields
+      "ass_plus", "ass_delta", "ass_obs_plus", "ass_obs_delta",
+      
+      # Continuity Clinic
+      "ass_cc_quart",
+      
+      # Observation fields
+      "ass_obs_type", "ass_obs_cdm", "ass_obs_acp", "ass_educat",
+      
+      # Physical Exam
+      "ass_obs_pe1", "ass_obs_pe2", "ass_obs_pe_3", "ass_obs_pe_4",
+      
+      # Presentation
+      "ass_obs_pres_1", "ass_obs_pres_2", "ass_obs_pres_3",
+      
+      # Written H&P
+      "ass_obs_writehp_1", "ass_obs_writehp_2", "ass_obs_writehp_3", "ass_obs_writehp_4",
+      
+      # Daily Notes
+      "ass_obs_daily_1", "ass_obs_daily_2", "ass_obs_daily_3", "ass_obs_daily_4",
+      
+      # Patient Discharge
+      "ass_obs_dc_1", "ass_obs_dc_2", "ass_obs_dc_3", "ass_obs_dc_4",
+      
+      # Patient/Family Counseling
+      "ass_obs_meet_1", "ass_obs_meet_2", "ass_obs_meet_3",
+      
+      # Supervision
+      "ass_obs_senior_1", "ass_obs_senior_2", "ass_obs_senior_3", "ass_obs_senior_4",
+      
+      # Procedure
+      "ass_obs_proc_type", "ass_obs_proc_prim", "ass_obs_proc_up", "ass_obs_proc_ass", "ass_obs_proc_pt_comf",
+      
+      # Multi-D Rounds
+      "ass_obs_mdr_1", "ass_obs_mdr_2", "ass_obs_mdr_3",
+      
+      # Emergency
+      "ass_obs_emer_sit", "ass_obs_emer_1", "ass_obs_emer_2", "ass_obs_emer_3", "ass_obs_emer_4", "ass_obs_emer5",
+      
+      # Single Day Clinic
+      "ass_day_pc1_r1", "ass_day_pc3_r1", "ass_day_pc5_r3", "ass_cons_prof",
+      
+      # Consultation
+      "ass_cons_care", "plan_pc3_r1", "ass_cons_testing_mk3", "ass_cons_comm_ics2_r1", "ass_cons_sdh_sbp2_r2",
+      
+      # Bridge Clinic
+      "ass_bridge_sbp2_r2", "ass_bridge_pc5_r3", "ass_bridge_sbp3_r2",
+      
+      # Intern Inpatient
+      "ass_int_ip_pc4_r1", "ass_int_ip_pc4_r2", "ass_int_ip_pc1_r1", "ass_int_ip_pc3_r1", 
+      "ass_int_ip_mk1", "ass_int_ip_sbp2_r1", "ass_int_ip_ics3_r2", "ass_int_ip_pbl2_r2", "ass_int_ip_beside",
+      
+      # Senior Inpatient
+      "ass_res_ip_pc4_r2", "ass_res_ip_ics2_r1", "ass_res_ip_mk1", 
+      "ass_res_ip_sbp3_r1", "ass_res_ip_pc4_r1", "ass_res_ip_sbp3_r2"
+    )
+  }
+  
+  # Universal smart refresh function
+  universal_smart_refresh <- function(preserve_faculty = TRUE, show_notification = TRUE) {
+    cat("=== UNIVERSAL SMART REFRESH ===\n")
     
-    if (!exists("validate_observation_form")) {
-      showNotification("Validation function not found. Please check your form builder functions.", 
-                       type = "error", duration = 5)
-      return()
+    # Preserve faculty info if requested
+    preserved_faculty <- if (preserve_faculty && !is.null(values$selected_faculty)) {
+      values$selected_faculty
+    } else {
+      NULL
     }
     
-    missing_fields <- validate_observation_form(input)
+    # Clear all reactive values except faculty (if preserving)
+    values$selected_resident <- NULL
+    values$selected_eval_type <- NULL
+    values$current_search_results <- NULL
+    values$current_resident_results <- NULL
+    values$cc_quarter_selection_info <- NULL
+    values$obs_type_selection_info <- NULL
     
-    if (length(missing_fields) > 0) {
-      cat("Validation failed. Missing fields:", paste(missing_fields, collapse = ", "), "\n")
+    # Clear all search fields
+    updateTextInput(session, "resident_search", value = "")
+    if (!preserve_faculty) {
+      updateTextInput(session, "faculty_search", value = "")
+    }
+    
+    # Clear ALL possible form fields universally
+    all_fields <- get_all_form_field_names()
+    
+    for (field in all_fields) {
+      try({
+        # Try different input types
+        updateTextInput(session, field, value = "")
+        updateTextAreaInput(session, field, value = "")
+        updateSelectInput(session, field, selected = "")
+        updateRadioButtons(session, field, selected = character(0))
+        updateCheckboxGroupInput(session, field, selected = character(0))
+        updateNumericInput(session, field, value = NA)
+      }, silent = TRUE)
+    }
+    
+    # Hide any dynamic sections that might be visible
+    session$sendCustomMessage("hideAllDynamicSections", list())
+    
+    # Restore faculty and set appropriate step
+    if (preserve_faculty && !is.null(preserved_faculty)) {
+      values$selected_faculty <- preserved_faculty
+      values$current_step <- "resident"
+      
+      if (show_notification) {
+        showNotification(
+          paste0("🔄 Form cleared. Ready to evaluate another resident with ", preserved_faculty$fac_name),
+          type = "default",
+          duration = 3
+        )
+      }
+      
+      cat("Smart refresh completed. Faculty preserved:", preserved_faculty$fac_name, "\n")
+    } else {
+      values$selected_faculty <- NULL
+      values$current_step <- "faculty"
+      
+      if (show_notification) {
+        showNotification("🔄 Form completely cleared. Please select faculty to begin.", type = "default", duration = 3)
+      }
+      
+      cat("Smart refresh completed. Everything cleared.\n")
+    }
+  }
+  
+  # Universal faculty data refresh
+  universal_faculty_refresh <- function() {
+    tryCatch({
+      cat("=== UNIVERSAL FACULTY REFRESH ===\n")
+      
+      # Re-fetch faculty data from REDCap
+      new_faculty_data <- get_faculty_data()
+      
+      if (!is.null(new_faculty_data)) {
+        # Update global faculty data
+        faculty_data <<- new_faculty_data
+        cat("Faculty data refreshed. Total faculty:", nrow(faculty_data), "\n")
+        
+        # If a faculty member was selected, try to update their profile
+        if (!is.null(values$selected_faculty)) {
+          current_name <- values$selected_faculty$fac_name
+          current_email <- values$selected_faculty$fac_email
+          
+          # Look for matching faculty in refreshed data
+          name_field <- get_field_name(faculty_data, c("fac_name", "name", "faculty_name"))
+          email_field <- get_field_name(faculty_data, c("fac_email", "email"))
+          
+          updated_faculty <- faculty_data %>%
+            filter(
+              (!is.na(.data[[name_field]]) & .data[[name_field]] == current_name) |
+                (!is.na(.data[[email_field]]) & .data[[email_field]] == current_email)
+            ) %>%
+            slice(1)
+          
+          if (nrow(updated_faculty) > 0) {
+            values$selected_faculty <- updated_faculty
+            cat("Updated selected faculty with refreshed profile\n")
+            
+            showNotification(
+              paste("✅", current_name, "'s profile updated with latest information!"),
+              type = "default",
+              duration = 4
+            )
+            
+            return(TRUE)
+          } else {
+            cat("Could not find updated profile for current faculty\n")
+            showNotification(
+              paste("⚠️ Could not find updated profile for", current_name),
+              type = "warning",
+              duration = 4
+            )
+            return(FALSE)
+          }
+        } else {
+          showNotification("✅ Faculty database refreshed!", type = "default", duration = 3)
+          return(TRUE)
+        }
+        
+      } else {
+        cat("Failed to refresh faculty data\n")
+        showNotification("❌ Could not refresh faculty database. Please try again.", type = "error", duration = 4)
+        return(FALSE)
+      }
+      
+    }, error = function(e) {
+      cat("Error refreshing faculty data:", e$message, "\n")
       showNotification(
-        paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
+        paste("❌ Error refreshing faculty database:", e$message),
         type = "error",
         duration = 5
       )
-      return()
-    }
-    
-    cat("Form validation passed\n")
-    
-    if (!exists("collect_observation_data")) {
-      showNotification("Data collection function not found. Please check your form builder functions.", 
-                       type = "error", duration = 5)
-      return()
-    }
-    
-    eval_data <- collect_observation_data(input, values$selected_faculty, values$selected_resident)
-    
-    cat("Observation evaluation data collected:\n")
-    print(eval_data)
-    
+      return(FALSE)
+    })
+  }
+  
+  # ============================================================================
+  # UNIVERSAL SUBMISSION HANDLER
+  # ============================================================================
+  
+  # Generic submission handler that works for all evaluation types
+  universal_submission_handler <- function(eval_type, eval_type_name, validate_func, collect_func) {
     tryCatch({
-      if (!exists("submit_evaluation_data")) {
-        showNotification("Submission function not found. Please check your evaluation helper functions.", 
-                         type = "error", duration = 5)
+      cat("=== UNIVERSAL SUBMISSION:", toupper(eval_type), "===\n")
+      
+      # Validate required objects exist
+      if (is.null(values$selected_faculty)) {
+        showNotification("Faculty selection was lost. Please select faculty again.", type = "error", duration = 4)
+        values$current_step <- "faculty"
         return()
       }
       
-      result <- submit_evaluation_data(
-        eval_data = eval_data,
-        eval_type = "obs",
-        resident_id = values$selected_resident$record_id,
-        token = if(exists("rdm_token")) rdm_token else NULL,
-        url = if(exists("url")) url else NULL
-      )
-      
-      cat("Submission successful:", result, "\n")
-      
-      # Get observation type description for notification
-      obs_desc <- if (exists("get_obs_type_description")) {
-        get_obs_type_description(input$ass_obs_type)
-      } else {
-        paste("Observation Type", input$ass_obs_type)
+      if (is.null(values$selected_resident)) {
+        showNotification("Resident selection was lost. Please select resident again.", type = "error", duration = 4)
+        values$current_step <- "resident" 
+        return()
       }
       
-      showNotification(
-        paste0("✅ Observation evaluation submitted successfully! (", obs_desc, ")"),
-        type = "default",
-        duration = 5
-      )
+      # Debug current state
+      cat("Faculty:", values$selected_faculty$fac_name, "\n")
+      cat("Resident:", values$selected_resident$name, "ID:", values$selected_resident$record_id, "\n")
       
-      # Reset to start
-      values$selected_faculty <- NULL
-      values$selected_resident <- NULL
-      values$selected_eval_type <- NULL
-      values$current_step <- "faculty"
+      # Validate form
+      missing_fields <- validate_func(input)
       
-      updateTextInput(session, "faculty_search", value = "")
-      updateTextInput(session, "resident_search", value = "")
+      if (length(missing_fields) > 0) {
+        showNotification(
+          paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
+          type = "error",
+          duration = 6
+        )
+        return()
+      }
       
-    }, error = function(e) {
-      cat("Error submitting observation evaluation:", e$message, "\n")
-      showNotification(
-        paste("❌ Error submitting evaluation:", e$message),
-        type = "error",
-        duration = 8
-      )
-    })
-  })
-  
-  # ============================================================================
-  # OTHER EVALUATION SUBMISSION HANDLERS
-  # ============================================================================
-  
-  # Generic submission handler function
-  handle_evaluation_submission <- function(eval_type, validate_func, collect_func) {
-    cat("=== SUBMITTING", toupper(eval_type), "EVALUATION ===\n")
-    
-    missing_fields <- validate_func(input)
-    
-    if (length(missing_fields) > 0) {
-      cat("Validation failed. Missing fields:", paste(missing_fields, collapse = ", "), "\n")
-      showNotification(
-        paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
-        type = "error",
-        duration = 5
-      )
-      return()
-    }
-    
-    cat("Form validation passed\n")
-    
-    eval_data <- collect_func(input, values$selected_faculty, values$selected_resident)
-    
-    cat("Evaluation data collected:\n")
-    print(eval_data)
-    
-    tryCatch({
+      cat("Form validation passed\n")
+      
+      # Collect data
+      eval_data <- collect_func(input, values$selected_faculty, values$selected_resident)
+      
+      cat("Evaluation data collected for", eval_type, "\n")
+      
+      # Submit to REDCap
       result <- submit_evaluation_data(
         eval_data = eval_data,
         eval_type = eval_type,
         resident_id = values$selected_resident$record_id,
-        token = if(exists("rdm_token")) rdm_token else NULL,
-        url = if(exists("url")) url else NULL
+        token = rdm_token,
+        url = url
       )
       
-      cat("Submission successful:", result, "\n")
+      cat("Submission successful for", eval_type, "\n")
       
-      eval_name <- switch(eval_type,
-                          "day" = "Single Day Clinic",
-                          "cons" = "Consultation", 
-                          "bridge" = "Bridge Clinic",
-                          "int_ip" = "Intern Inpatient",
-                          "res_ip" = "Senior Inpatient",
-                          eval_type
-      )
-      
+      # Success notification
       showNotification(
-        paste0("✅ ", eval_name, " evaluation submitted successfully!"),
+        paste0("✅ ", eval_type_name, " evaluation submitted successfully!"),
         type = "default",
         duration = 5
       )
       
-      # Reset to start
-      values$selected_faculty <- NULL
-      values$selected_resident <- NULL
-      values$selected_eval_type <- NULL
-      values$current_step <- "faculty"
-      
-      updateTextInput(session, "faculty_search", value = "")
-      updateTextInput(session, "resident_search", value = "")
+      # Universal smart refresh (preserve faculty)
+      universal_smart_refresh(preserve_faculty = TRUE, show_notification = TRUE)
       
     }, error = function(e) {
-      cat("Error submitting evaluation:", e$message, "\n")
+      cat("Error submitting", eval_type, "evaluation:", e$message, "\n")
       showNotification(
-        paste("❌ Error submitting evaluation:", e$message),
+        paste("❌ Error submitting", eval_type_name, "evaluation:", e$message),
         type = "error",
         duration = 8
       )
     })
   }
   
-  # Individual submission handlers
+  # ============================================================================
+  # UPDATE ALL SUBMISSION HANDLERS TO USE UNIVERSAL SYSTEM
+  # ============================================================================
+  
+  # Replace all your existing submission handlers with these:
+  
   observeEvent(input$submit_single_day_evaluation, {
-    tryCatch({
-      cat("=== SUBMITTING DAY EVALUATION ===\n")
-      
-      # Validate required objects exist
-      if (is.null(values$selected_faculty)) {
-        showNotification("Faculty selection was lost. Please select faculty again.", type = "error")
-        values$current_step <- "faculty"
-        return()
-      }
-      
-      if (is.null(values$selected_resident)) {
-        showNotification("Resident selection was lost. Please select resident again.", type = "error")
-        values$current_step <- "resident"
-        return()
-      }
-      
-      # Debug: Print current state
-      cat("Faculty:", values$selected_faculty$fac_name, "\n")
-      cat("Resident:", values$selected_resident$name, "ID:", values$selected_resident$record_id, "\n")
-      
-      if (exists("validate_single_day_clinic_form") && exists("collect_single_day_clinic_data")) {
-        missing_fields <- validate_single_day_clinic_form(input)
-        
-        if (length(missing_fields) > 0) {
-          showNotification(
-            paste("Please complete the following required fields:", paste(missing_fields, collapse = ", ")),
-            type = "error",
-            duration = 5
-          )
-          return()
-        }
-        
-        eval_data <- collect_single_day_clinic_data(input, values$selected_faculty, values$selected_resident)
-        
-        result <- submit_evaluation_data(
-          eval_data = eval_data,
-          eval_type = "day",
-          resident_id = values$selected_resident$record_id,
-          token = rdm_token,
-          url = url
-        )
-        
-        showNotification("✅ Single Day Clinic evaluation submitted successfully!", type = "default", duration = 5)
-        
-        # Reset to resident selection (keep faculty selected)
-        values$selected_resident <- NULL
-        values$selected_eval_type <- NULL
-        values$current_step <- "resident"
-        updateTextInput(session, "resident_search", value = "")
-        
-      } else {
-        showNotification("Single day clinic functions not found.", type = "error", duration = 5)
-      }
-      
-    }, error = function(e) {
-      cat("Error submitting single day evaluation:", e$message, "\n")
-      showNotification(
-        paste("❌ Error submitting evaluation:", e$message),
-        type = "error",
-        duration = 8
-      )
-    })
+    if (exists("validate_single_day_clinic_form") && exists("collect_single_day_clinic_data")) {
+      universal_submission_handler("day", "Single Day Clinic", validate_single_day_clinic_form, collect_single_day_clinic_data)
+    } else {
+      showNotification("Single day clinic functions not found.", type = "error", duration = 5)
+    }
+  })
+  
+  observeEvent(input$submit_observation_evaluation, {
+    if (exists("validate_observation_form") && exists("collect_observation_data")) {
+      universal_submission_handler("obs", "Observation", validate_observation_form, collect_observation_data)
+    } else {
+      showNotification("Observation functions not found.", type = "error", duration = 5)
+    }
+  })
+  
+  observeEvent(input$submit_continuity_clinic_evaluation, {
+    if (exists("validate_continuity_clinic_with_level") && exists("collect_continuity_clinic_data")) {
+      # Special wrapper for CC validation (needs resident level)
+      cc_validate <- function(input) validate_continuity_clinic_with_level(input, values$selected_resident$Level)
+      universal_submission_handler("cc", "Continuity Clinic", cc_validate, collect_continuity_clinic_data)
+    } else {
+      showNotification("Continuity clinic functions not found.", type = "error", duration = 5)
+    }
   })
   
   observeEvent(input$submit_consultation_evaluation, {
     if (exists("validate_consultation_form") && exists("collect_consultation_data")) {
-      handle_evaluation_submission("cons", validate_consultation_form, collect_consultation_data)
+      universal_submission_handler("cons", "Consultation", validate_consultation_form, collect_consultation_data)
     } else {
       showNotification("Consultation functions not found.", type = "error", duration = 5)
     }
@@ -1455,7 +1546,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$submit_bridge_evaluation, {
     if (exists("validate_bridge_clinic_form") && exists("collect_bridge_clinic_data")) {
-      handle_evaluation_submission("bridge", validate_bridge_clinic_form, collect_bridge_clinic_data)
+      universal_submission_handler("bridge", "Bridge Clinic", validate_bridge_clinic_form, collect_bridge_clinic_data)
     } else {
       showNotification("Bridge clinic functions not found.", type = "error", duration = 5)
     }
@@ -1463,7 +1554,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$submit_intern_inpatient_evaluation, {
     if (exists("validate_intern_inpatient_form") && exists("collect_intern_inpatient_data")) {
-      handle_evaluation_submission("int_ip", validate_intern_inpatient_form, collect_intern_inpatient_data)
+      universal_submission_handler("int_ip", "Intern Inpatient", validate_intern_inpatient_form, collect_intern_inpatient_data)
     } else {
       showNotification("Intern inpatient functions not found.", type = "error", duration = 5)
     }
@@ -1471,16 +1562,94 @@ server <- function(input, output, session) {
   
   observeEvent(input$submit_senior_inpatient_evaluation, {
     if (exists("validate_senior_inpatient_form") && exists("collect_senior_inpatient_data")) {
-      handle_evaluation_submission("res_ip", validate_senior_inpatient_form, collect_senior_inpatient_data)
+      universal_submission_handler("res_ip", "Senior Inpatient", validate_senior_inpatient_form, collect_senior_inpatient_data)
     } else {
       showNotification("Senior inpatient functions not found.", type = "error", duration = 5)
     }
   })
   
-  # Generic submission for unimplemented forms
-  observeEvent(input$submit_evaluation, {
-    showNotification("Evaluation submission will be implemented with actual forms.", type = "message", duration = 3)
+  # ============================================================================
+  # UNIVERSAL REFRESH BUTTONS AND CONTROLS
+  # ============================================================================
+  
+  # Add refresh button to selected faculty info
+  output$selected_faculty_info <- renderUI({
+    if (!is.null(values$selected_faculty)) {
+      faculty <- values$selected_faculty
+      
+      name_field <- get_field_name(faculty, c("fac_name", "name", "faculty_name"))
+      dept_field <- get_field_name(faculty, c("fac_div", "department", "division"))
+      role_field <- get_field_name(faculty, c("fac_fell", "role", "position"))
+      
+      tagList(
+        div(
+          strong(faculty[[name_field]]),
+          br(),
+          if (!is.null(dept_field) && !is.na(faculty[[dept_field]])) {
+            paste("Department:", faculty[[dept_field]])
+          } else {
+            "Faculty member"
+          },
+          br(),
+          if (!is.null(role_field) && !is.na(faculty[[role_field]])) {
+            paste("Role:", faculty[[role_field]])
+          },
+          br(), br(),
+          div(class = "faculty-selected", "✅ Faculty selected successfully!")
+        ),
+        br(),
+        div(class = "text-center",
+            # Universal refresh buttons
+            div(class = "btn-group", role = "group",
+                actionButton("universal_refresh_faculty", "🔄 Refresh Profile", 
+                             class = "btn btn-outline-info btn-sm",
+                             title = "Update faculty profile from database"),
+                actionButton("universal_clear_form", "🧹 Clear Form", 
+                             class = "btn btn-outline-secondary btn-sm",
+                             title = "Clear all fields but keep faculty"),
+                actionButton("universal_start_over", "🔄 Start Over", 
+                             class = "btn btn-outline-warning btn-sm",
+                             title = "Clear everything and start fresh")
+            ),
+            br(), br(),
+            tags$small("🔄 Refresh Profile: Update your info | 🧹 Clear Form: Keep faculty, clear rest | 🔄 Start Over: Clear everything", 
+                       style = "color: #666; font-style: italic; display: block; line-height: 1.4;")
+        )
+      )
+    } else {
+      div("Select your name from the search results above.")
+    }
   })
+  
+  # Handle universal refresh buttons
+  observeEvent(input$universal_refresh_faculty, {
+    showNotification("🔄 Refreshing your faculty profile...", type = "default", duration = 2)
+    universal_faculty_refresh()
+  })
+  
+  observeEvent(input$universal_clear_form, {
+    universal_smart_refresh(preserve_faculty = TRUE, show_notification = TRUE)
+  })
+  
+  observeEvent(input$universal_start_over, {
+    # Confirm before complete reset
+    showModal(modalDialog(
+      title = "Start Over?",
+      "This will clear everything including your faculty selection. Are you sure?",
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirm_start_over", "Yes, Start Over", class = "btn btn-warning")
+      )
+    ))
+  })
+  
+  observeEvent(input$confirm_start_over, {
+    removeModal()
+    universal_smart_refresh(preserve_faculty = FALSE, show_notification = TRUE)
+  })
+  
+  # Add JavaScript to hide dynamic sections
+  session$sendCustomMessage("addUniversalJS", list())
   
   # ============================================================================
   # FACULTY MODAL AND ADDITION

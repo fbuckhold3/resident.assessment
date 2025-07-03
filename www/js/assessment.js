@@ -309,3 +309,23 @@ document.addEventListener('DOMContentLoaded', function() {
 // Console logging for debugging (can be removed in production)
 console.log('Faculty Evaluation App JavaScript loaded successfully');
 console.log('Speech recognition supported:', speechRecognitionSupported());
+
+// Universal refresh handler - add this to your existing assessment.js file
+Shiny.addCustomMessageHandler('hideAllDynamicSections', function(data) {
+  // Hide any visible dynamic sections
+  $('#obs_assessment_questions_section').hide();
+  $('#obs_form_controls_section').hide();
+  $('#assessment_questions_section').hide();
+  $('#form_controls_section').hide();
+  
+  // Reset any visible continue buttons
+  $('#continue_to_assessment').hide();
+  $('#continue_to_obs_assessment').hide();
+  
+  // Reset any selected buttons
+  $('.obs-type-button').removeClass('selected');
+  $('.eval-type-button').removeClass('selected');
+  $('.clickable-quarter').removeClass('selected');
+  
+  console.log('All dynamic sections hidden by universal refresh');
+});
