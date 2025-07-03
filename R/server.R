@@ -93,6 +93,37 @@ server <- function(input, output, session) {
     return(filtered)
   })
   
+  # ============================================================================
+  # FACULTY SELECTION - Remove notifications
+  # ============================================================================
+  
+  # Handle faculty selection clicks (UPDATED - no notifications)
+  observe({
+    faculty_results <- values$current_search_results
+    if (!is.null(faculty_results)) {
+      for (i in 1:nrow(faculty_results)) {
+        local({
+          faculty_index <- i
+          button_id <- paste0("select_faculty_", faculty_index)
+          
+          observeEvent(input[[button_id]], {
+            if (!is.null(faculty_results) && faculty_index <= nrow(faculty_results)) {
+              values$selected_faculty <- faculty_results[faculty_index, ]
+              
+              name_field <- get_field_name(values$selected_faculty, c("fac_name", "name", "faculty_name"))
+              cat("Selected faculty:", values$selected_faculty[[name_field]], "\n")
+              
+              values$current_step <- "resident"
+              
+              # REMOVED: showNotification line
+              # showNotification(paste("Selected:", values$selected_faculty[[name_field]]), type = "default")
+            }
+          })
+        })
+      }
+    }
+  })
+  
   output$faculty_search_results <- renderUI({
     faculty_results <- filtered_faculty()
     
@@ -136,31 +167,6 @@ server <- function(input, output, session) {
     })
     
     do.call(tagList, result_list)
-  })
-  
-  # Handle faculty selection clicks
-  observe({
-    faculty_results <- values$current_search_results
-    if (!is.null(faculty_results)) {
-      for (i in 1:nrow(faculty_results)) {
-        local({
-          faculty_index <- i
-          button_id <- paste0("select_faculty_", faculty_index)
-          
-          observeEvent(input[[button_id]], {
-            if (!is.null(faculty_results) && faculty_index <= nrow(faculty_results)) {
-              values$selected_faculty <- faculty_results[faculty_index, ]
-              
-              name_field <- get_field_name(values$selected_faculty, c("fac_name", "name", "faculty_name"))
-              cat("Selected faculty:", values$selected_faculty[[name_field]], "\n")
-              
-              values$current_step <- "resident"
-              showNotification(paste("Selected:", values$selected_faculty[[name_field]]), type = "default")
-            }
-          })
-        })
-      }
-    }
   })
   
   output$selected_faculty_info <- renderUI({
@@ -247,6 +253,7 @@ server <- function(input, output, session) {
   })
   
   # Handle resident selection clicks
+  # Handle resident selection clicks (UPDATED - no notifications)
   observe({
     resident_results <- values$current_resident_results
     if (!is.null(resident_results)) {
@@ -261,13 +268,16 @@ server <- function(input, output, session) {
               
               cat("Selected resident:", values$selected_resident$name, "\n")
               values$current_step <- "evaluation_type"
-              showNotification(paste("Selected resident:", values$selected_resident$name), type = "default")
+              
+              # REMOVED: showNotification line
+              # showNotification(paste("Selected resident:", values$selected_resident$name), type = "default")
             }
           })
         })
       }
     }
   })
+  
   
   output$selected_resident_info <- renderUI({
     if (!is.null(values$selected_resident)) {
@@ -437,7 +447,9 @@ server <- function(input, output, session) {
         eval_info <- get_eval_type_display_info(eval_type)
         if (!is.null(eval_info)) {
           cat("Selected evaluation type:", eval_info$name, "\n")
-          showNotification(paste("Selected evaluation:", eval_info$name), type = "default")
+          
+          # REMOVED: showNotification line
+          # showNotification(paste("Selected evaluation:", eval_info$name), type = "default")
         }
       }
       
@@ -609,20 +621,12 @@ server <- function(input, output, session) {
     # Store selection info for validation/submission
     values$cc_quarter_selection_info <- selection_data
     
-    # Show notification
-    if (selection_data$isCompleted) {
-      showNotification(
-        paste("⚠️ Re-evaluating completed quarter:", selection_data$label),
-        type = "warning",
-        duration = 4
-      )
-    } else {
-      showNotification(
-        paste("✅ Starting evaluation for:", selection_data$label),
-        type = "default",
-        duration = 3
-      )
-    }
+    # REMOVED: Both showNotification lines
+    # if (selection_data$isCompleted) {
+    #   showNotification(paste("⚠️ Re-evaluating completed quarter:", selection_data$label), type = "warning", duration = 4)
+    # } else {
+    #   showNotification(paste("✅ Starting evaluation for:", selection_data$label), type = "default", duration = 3)
+    # }
   })
   
   output$cc_dynamic_questions <- renderUI({
@@ -832,12 +836,8 @@ server <- function(input, output, session) {
     # Store selection info for validation/submission
     values$obs_type_selection_info <- selection_data
     
-    # Show notification
-    showNotification(
-      paste("✅ Starting observation evaluation for:", selection_data$name),
-      type = "default",
-      duration = 3
-    )
+    # REMOVED: showNotification line
+    # showNotification(paste("✅ Starting observation evaluation for:", selection_data$name), type = "default", duration = 3)
   })
   
   observeEvent(input$submit_observation_evaluation, {
