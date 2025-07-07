@@ -625,6 +625,14 @@ validate_senior_inpatient_form <- function(input) {
 
 # Generic data collection function
 collect_evaluation_data <- function(input, faculty, resident, field_names) {
+  cat("=== COLLECT EVALUATION DATA DEBUG ===\n")
+  cat("Function called with:\n")
+  cat("  Faculty:", faculty$fac_name, "\n")
+  cat("  Resident:", resident$name, "\n")
+  cat("  Resident Level:", resident$Level, "\n")
+  cat("  Resident Type:", ifelse(is.null(resident$type), "NULL", resident$type), "\n")
+  cat("  Field count:", length(field_names), "\n")
+  
   # Start with universal fields
   eval_data <- list(
     # Universal fields (auto-populated)
@@ -637,16 +645,155 @@ collect_evaluation_data <- function(input, faculty, resident, field_names) {
     ass_delta = trimws(input$ass_delta)
   )
   
+  # ROTATOR NAME TRACKING - FIXED TO CHECK BOTH LEVEL AND TYPE
+  cat("=== ROTATOR TRACKING CHECK ===\n")
+  
+  # Check if this is a rotator by looking at BOTH Level and type fields
+  is_rotator <- FALSE
+  
+  if (!is.null(resident$Level) && resident$Level == "Rotator") {
+    is_rotator <- TRUE
+    cat("✅ ROTATOR DETECTED via Level field\n")
+  } else if (!is.null(resident$type) && resident$type == "Rotator") {
+    is_rotator <- TRUE
+    cat("✅ ROTATOR DETECTED via type field\n")
+  }
+  
+  if (is_rotator) {
+    eval_data$ass_rotator <- resident$name
+    cat("✅ ROTATOR - Added ass_rotator field:", resident$name, "\n")
+  } else {
+    cat("ℹ️ Not a rotator - Level:", resident$Level, "Type:", 
+        ifelse(is.null(resident$type), "NULL", resident$type), "\n")
+  }
+  
   # Add dynamic fields
   for (field_name in field_names) {
     eval_data[[field_name]] <- input[[field_name]]
     cat("Added field", field_name, "with value:", input[[field_name]], "\n")
   }
   
+  # Show final eval_data structure
+  cat("=== FINAL EVAL_DATA STRUCTURE ===\n")
+  cat("Fields in eval_data:", paste(names(eval_data), collapse = ", "), "\n")
+  if ("ass_rotator" %in% names(eval_data)) {
+    cat("✅ ass_rotator field present with value:", eval_data$ass_rotator, "\n")
+  } else {
+    cat("❌ ass_rotator field NOT present\n")
+  }
+  
   return(eval_data)
 }
 
+
 # Specific data collection functions for each evaluation type
+collect_continuity_clinic_data <- function(input, faculty, resident) {
+  # Get field names for this quarter and level
+  field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, resident$Level)
+  
+  # IMPORTANT: Use the main collect function that has FIXED rotator tracking
+  eval_data <- collect_evaluation_data(input, faculty, resident, field_names)
+  
+  # Add CC-specific fields that aren't in the main function
+  eval_data$ass_cc_quart <- input$ass_cc_quart
+  
+  # Add metadata about the selection if available
+  if (exists("values") && !is.null(values$cc_quarter_selection_info)) {
+    selection_info <- values$cc_quarter_selection_info
+    if (selection_info$isCompleted) {
+      cat("NOTE: This is a re-evaluation of a completed quarter\n")
+    }
+  }
+  
+  return(eval_data)
+}
+
+collect_observation_data <- function(input, faculty, resident) {
+  # Get field names for this observation type
+  field_names <- get_obs_fields_for_type(input$ass_obs_type)
+  
+  # IMPORTANT: Use the main collect function that has FIXED rotator tracking
+  eval_data <- collect_evaluation_data(input, faculty, resident, field_names)
+  
+  # Override plus/delta with observation-specific field names
+  eval_data$ass_plus <- trimws(input$ass_obs_plus)
+  eval_data$ass_delta <- trimws(input$ass_obs_delta)
+  
+  # Add observation-specific fields
+  eval_data$ass_obs_type <- input$ass_obs_type
+  
+  return(eval_data)
+}
+
+# Update all other collect functions to use the main function too
+collect_single_day_clinic_data <- function(input, faculty, resident) {
+  field_names <- c("ass_cons_prof")  # Add day-specific fields when they exist
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_consultation_data <- function(input, faculty, resident) {
+  field_names <- c("ass_cons_prof", "ass_cons_care", "plan_pc3_r1", 
+                   "ass_cons_testing_mk3", "ass_cons_comm_ics2_r1", "ass_cons_sdh_sbp2_r2")
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_bridge_clinic_data <- function(input, faculty, resident) {
+  field_names <- c("ass_bridge_sbp2_r2", "ass_bridge_pc5_r3", "ass_bridge_sbp3_r2")
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_intern_inpatient_data <- function(input, faculty, resident) {
+  field_names <- c("ass_int_ip_pc4_r1", "ass_int_ip_pc4_r2", "ass_int_ip_pc1_r1", 
+                   "ass_int_ip_pc3_r1", "ass_int_ip_mk1", "ass_int_ip_sbp2_r1", 
+                   "ass_int_ip_ics3_r2", "ass_int_ip_pbl2_r2", "ass_int_ip_beside")
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_senior_inpatient_data <- function(input, faculty, resident) {
+  field_names <- c("ass_res_ip_pc4_r2", "ass_res_ip_ics2_r1", "ass_res_ip_mk1", 
+                   "ass_res_ip_sbp3_r1", "ass_res_ip_pc4_r1", "ass_res_ip_sbp3_r2")
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_continuity_clinic_data <- function(input, faculty, resident) {
+  # Get field names for this quarter and level
+  field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, resident$Level)
+  
+  # IMPORTANT: Use the main collect function that has FIXED rotator tracking
+  eval_data <- collect_evaluation_data(input, faculty, resident, field_names)
+  
+  # Add CC-specific fields that aren't in the main function
+  eval_data$ass_cc_quart <- input$ass_cc_quart
+  
+  # Add metadata about the selection if available
+  if (exists("values") && !is.null(values$cc_quarter_selection_info)) {
+    selection_info <- values$cc_quarter_selection_info
+    if (selection_info$isCompleted) {
+      cat("NOTE: This is a re-evaluation of a completed quarter\n")
+    }
+  }
+  
+  return(eval_data)
+}
+
+collect_observation_data <- function(input, faculty, resident) {
+  # Get field names for this observation type
+  field_names <- get_obs_fields_for_type(input$ass_obs_type)
+  
+  # IMPORTANT: Use the main collect function that has FIXED rotator tracking
+  eval_data <- collect_evaluation_data(input, faculty, resident, field_names)
+  
+  # Override plus/delta with observation-specific field names
+  eval_data$ass_plus <- trimws(input$ass_obs_plus)
+  eval_data$ass_delta <- trimws(input$ass_obs_delta)
+  
+  # Add observation-specific fields
+  eval_data$ass_obs_type <- input$ass_obs_type
+  
+  return(eval_data)
+}
+
+# Update all other collect functions to use the main function too
 collect_single_day_clinic_data <- function(input, faculty, resident) {
   field_names <- c("ass_cons_prof")  # Add day-specific fields when they exist
   return(collect_evaluation_data(input, faculty, resident, field_names))
@@ -913,44 +1060,6 @@ validate_continuity_clinic_with_level <- function(input, resident_level) {
   return(missing_fields)
 }
 
-
-collect_continuity_clinic_data <- function(input, faculty, resident) {
-  # Start with universal fields
-  eval_data <- list(
-    # Universal fields (auto-populated)
-    ass_date = format(Sys.Date(), "%Y-%m-%d"),
-    ass_faculty = faculty$fac_name,
-    ass_specialty = faculty$fac_div,
-    
-    # Plus/Delta (user input)
-    ass_plus = trimws(input$ass_plus),
-    ass_delta = trimws(input$ass_delta),
-    
-    # Quarter selection
-    ass_cc_quart = input$ass_cc_quart
-  )
-  
-  # Add metadata about the selection if available
-  if (exists("values") && !is.null(values$cc_quarter_selection_info)) {
-    selection_info <- values$cc_quarter_selection_info
-    if (selection_info$isCompleted) {
-      cat("NOTE: This is a re-evaluation of a completed quarter\n")
-      # You could add a field to track this if needed
-      # eval_data$ass_cc_re_evaluation <- "1"
-    }
-  }
-  
-  # Get field names for this quarter and level
-  field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, resident$Level)
-  
-  # Add dynamic fields
-  for (field_name in field_names) {
-    eval_data[[field_name]] <- input[[field_name]]
-    cat("Added CC field", field_name, "with value:", input[[field_name]], "\n")
-  }
-  
-  return(eval_data)
-}
 
 # Add this to your evaluation_form_builder.R file
 
@@ -1582,6 +1691,12 @@ collect_observation_data <- function(input, faculty, resident) {
     # Observation type selection
     ass_obs_type = input$ass_obs_type
   )
+  
+  # ADD ROTATOR NAME TRACKING FOR OBSERVATIONS
+  if (!is.null(resident$Level) && resident$Level == "Rotator") {
+    eval_data$ass_rotator <- resident$name
+    cat("Added rotator name to observation evaluation:", resident$name, "\n")
+  }
   
   # Get field names for this observation type
   field_names <- get_obs_fields_for_type(input$ass_obs_type)
