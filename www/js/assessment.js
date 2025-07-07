@@ -55,57 +55,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-// Enhanced form validation with visual feedback
-function validateFacultyForm() {
-  var requiredFields = ['fac_name', 'fac_email', 'fac_div', 'fac_fell'];
-  var missingFields = [];
-  
-  requiredFields.forEach(function(fieldId) {
-    var field = document.getElementById(fieldId);
-    var formGroup = field ? field.closest('.form-group') : null;
-    
-    if (!field || !field.value || field.value.trim() === '') {
-      missingFields.push(fieldId);
-      if (formGroup) {
-        formGroup.classList.add('has-error');
-      }
-    } else {
-      if (formGroup) {
-        formGroup.classList.remove('has-error');
-      }
-    }
-  });
-  
-  return missingFields;
-}
 
-// Real-time validation (optional enhancement)
-function addRealTimeValidation() {
-  var requiredFields = ['fac_name', 'fac_email', 'fac_div', 'fac_fell'];
-  
-  requiredFields.forEach(function(fieldId) {
-    var field = document.getElementById(fieldId);
-    if (field) {
-      field.addEventListener('blur', function() {
-        var formGroup = field.closest('.form-group');
-        if (formGroup) {
-          if (field.value && field.value.trim() !== '') {
-            formGroup.classList.remove('has-error');
-          } else {
-            formGroup.classList.add('has-error');
-          }
-        }
-      });
-      
-      field.addEventListener('input', function() {
-        var formGroup = field.closest('.form-group');
-        if (formGroup && field.value && field.value.trim() !== '') {
-          formGroup.classList.remove('has-error');
-        }
-      });
-    }
-  });
-}
+
 
 // Initialize real-time validation when document is ready
 document.addEventListener('DOMContentLoaded', function() {
@@ -138,25 +89,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 500);
 });
 
-// Loading state management
-function setButtonLoading(buttonId, isLoading) {
-  var button = document.getElementById(buttonId);
-  if (button) {
-    if (isLoading) {
-      button.disabled = true;
-      button.classList.add('loading');
-      button.innerHTML = button.innerHTML + ' <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-    } else {
-      button.disabled = false;
-      button.classList.remove('loading');
-      // Remove spinner
-      var spinner = button.querySelector('.spinner-border');
-      if (spinner) {
-        spinner.remove();
-      }
-    }
-  }
-}
 
 // ============================================================================
 // SPEECH-TO-TEXT FUNCTIONALITY

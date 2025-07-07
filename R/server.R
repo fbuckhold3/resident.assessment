@@ -1157,7 +1157,8 @@ server <- function(input, output, session) {
         cat("Building question", i, ":", field_row$field_name, "type:", field_row$field_type, "\n")
         
         # Special handling for Physical Exam yes/no fields
-        if (field_row$field_name %in% c("ass_obs_pe_3", "ass_obs_pe_4")) {
+        if (field_row$field_name %in% c("ass_obs_pe_3", "ass_obs_pe_4", "ass_obs_daily_1", 
+                                        "ass_obs_proc_prim", "ass_obs_proc_up", "ass_obs_proc_pt_comf")) {
           cat("  → Building as yes/no dropdown\n")
           return(div(class = "eval-field-group",
                      tags$label(field_row$field_label, class = "eval-field-label required"),

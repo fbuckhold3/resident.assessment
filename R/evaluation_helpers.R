@@ -213,33 +213,6 @@ get_eval_type_display_info <- function(eval_type_id, resident_level = NULL) {
   return(eval_info)
 }
 
-# Debug function to test the filtering:
-debug_eval_filtering <- function(faculty_div, resident_level) {
-  cat("=== DEBUG EVAL FILTERING ===\n")
-  cat("Faculty division:", faculty_div, "\n")
-  cat("Resident level:", resident_level, "\n")
-  
-  # Get available types by division
-  available_types <- get_available_eval_types_by_division(faculty_div)
-  cat("Available by division:", paste(available_types, collapse = ", "), "\n")
-  
-  # Filter by resident level
-  filtered_types <- filter_eval_types_by_resident_level(available_types, resident_level)
-  cat("Final filtered types:", paste(filtered_types, collapse = ", "), "\n")
-  
-  # Show what was removed
-  removed_types <- setdiff(available_types, filtered_types)
-  if (length(removed_types) > 0) {
-    cat("Removed types:", paste(removed_types, collapse = ", "), "\n")
-  } else {
-    cat("No types removed\n")
-  }
-  
-  cat("=== END DEBUG ===\n")
-  return(filtered_types)
-}
-
-
 # Check if evaluation type is appropriate for resident level
 is_eval_appropriate_for_level <- function(eval_type_id, resident_level) {
   # Most evaluations are appropriate for all levels
@@ -251,98 +224,6 @@ is_eval_appropriate_for_level <- function(eval_type_id, resident_level) {
   }
   
   return(appropriate)
-}
-
-# Get the next evaluation instance for a specific evaluation type
-get_next_eval_instance <- function(resident_id, eval_type, token, url) {
-  tryCatch({
-    cat("=== GETTING NEXT INSTANCE FOR RESIDENT:", resident_id, "EVAL TYPE:", eval_type, "===\n")
-    
-    # Map evaluation type to REDCap instrument name
-    instrument_map <- list(
-      "cc" = "continuity_clinic_evaluation",
-      "obs" = "observation_evaluation", 
-      "int_ip" = "intern_inpatient_evaluation",
-      "res_ip" = "senior_inpatient_evaluation",
-      "bridge" = "bridge_clinic_evaluation",
-      "cons" = "consultation_evaluation",
-      "day" = "single_day_clinic_evaluation"
-    )
-    
-    instrument_name <- instrument_map[[eval_type]]
-    
-    if (is.null(instrument_name)) {
-      cat("Unknown evaluation type:", eval_type, "\n")
-      return(1)
-    }
-    
-    # Query for specific record with only needed fields
-    response <- httr::POST(
-      url = url,
-      body = list(
-        token = token,
-        content = "record",
-        action = "export",
-        format = "json",
-        type = "flat",
-        records = resident_id,
-        fieldNames = "record_id,redcap_repeat_instrument,redcap_repeat_instance",
-        rawOrLabel = "raw",
-        rawOrLabelHeaders = "raw",
-        exportCheckboxLabel = "false",
-        exportSurveyFields = "false",
-        exportDataAccessGroups = "false",
-        returnFormat = "json"
-      ),
-      encode = "form"
-    )
-    
-    cat("REDCap query response status:", httr::status_code(response), "\n")
-    
-    if (httr::status_code(response) == 200) {
-      response_text <- httr::content(response, "text", encoding = "UTF-8")
-      all_data <- jsonlite::fromJSON(response_text)
-      
-      if (is.data.frame(all_data) && nrow(all_data) > 0) {
-        # Filter for this specific evaluation instrument
-        eval_instances <- all_data[
-          !is.na(all_data$redcap_repeat_instrument) & 
-            all_data$redcap_repeat_instrument == instrument_name, 
-        ]
-        
-        cat("Evaluation instances found for", instrument_name, ":", nrow(eval_instances), "\n")
-        
-        if (nrow(eval_instances) > 0) {
-          # Get all instance numbers
-          instances <- as.numeric(eval_instances$redcap_repeat_instance)
-          instances <- instances[!is.na(instances)]
-          
-          if (length(instances) > 0) {
-            instances <- sort(instances)
-            max_instance <- max(instances)
-            next_instance <- max_instance + 1
-            
-            cat("✅ Found existing instances:", paste(instances, collapse = ", "), "\n")
-            cat("✅ Max instance:", max_instance, "Next instance:", next_instance, "\n")
-            
-            return(next_instance)
-          }
-        }
-      }
-    } else {
-      cat("❌ REDCap query failed with status:", httr::status_code(response), "\n")
-      error_text <- httr::content(response, "text", encoding = "UTF-8")
-      cat("Error details:", error_text, "\n")
-    }
-    
-    # Fallback to instance 1 if no existing instances found
-    cat("⚠️ No existing", instrument_name, "instances found, starting with instance 1\n")
-    return(1)
-    
-  }, error = function(e) {
-    cat("❌ Error in get_next_eval_instance:", e$message, "\n")
-    return(1)
-  })
 }
 
 
