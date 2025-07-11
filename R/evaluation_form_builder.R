@@ -235,7 +235,7 @@ build_consultation_form <- function() {
   # Get consultation fields: ass_cons_prof, ass_cons_care, plan_pc3_r1, ass_cons_testing_mk3, ass_cons_comm_ics2_r1, ass_cons_sdh_sbp2_r2
   cons_fields <- rdm_dict %>%
     filter(form_name == "assessment") %>%
-    filter(field_name %in% c("ass_cons_prof", "ass_cons_care", "plan_pc3_r1", 
+    filter(field_name %in% c("ass_cons_prof", "ass_cons_careplan_pc3_r1", 
                              "ass_cons_testing_mk3", "ass_cons_comm_ics2_r1", "ass_cons_sdh_sbp2_r2")) %>%
     arrange(field_name)
   
@@ -596,7 +596,7 @@ validate_single_day_clinic_form <- function(input) {
 }
 
 validate_consultation_form <- function(input) {
-  field_names <- c("ass_cons_prof", "ass_cons_care", "plan_pc3_r1", 
+  field_names <- c("ass_cons_prof", "ass_cons_careplan_pc3_r1", 
                    "ass_cons_testing_mk3", "ass_cons_comm_ics2_r1", "ass_cons_sdh_sbp2_r2")
   return(validate_evaluation_form(input, "cons", field_names))
 }
@@ -732,7 +732,7 @@ collect_single_day_clinic_data <- function(input, faculty, resident) {
 }
 
 collect_consultation_data <- function(input, faculty, resident) {
-  field_names <- c("ass_cons_prof", "ass_cons_care", "plan_pc3_r1", 
+  field_names <- c("ass_cons_prof", "ass_cons_careplan_pc3_r1", 
                    "ass_cons_testing_mk3", "ass_cons_comm_ics2_r1", "ass_cons_sdh_sbp2_r2")
   return(collect_evaluation_data(input, faculty, resident, field_names))
 }
