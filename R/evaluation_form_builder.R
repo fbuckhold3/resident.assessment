@@ -638,7 +638,7 @@ collect_evaluation_data <- function(input, faculty, resident, field_names) {
     "Intern" = "1",
     "PGY2" = "2",
     "PGY3" = "3",
-    "Rotator" = "4",
+    "Rotator" = "1",  # Rotators use same code as Intern
     NA  # Default if level doesn't match
   )
   cat("  Mapped level '", resident$Level, "' to code: ", level_code, "\n", sep = "")
@@ -1693,7 +1693,7 @@ collect_observation_data <- function(input, faculty, resident) {
     "Intern" = "1",
     "PGY2" = "2",
     "PGY3" = "3",
-    "Rotator" = "4",
+    "Rotator" = "1",  # Rotators use same code as Intern
     NA  # Default if level doesn't match
   )
   cat("Observation - Mapped level '", resident$Level, "' to code: ", level_code, "\n", sep = "")
