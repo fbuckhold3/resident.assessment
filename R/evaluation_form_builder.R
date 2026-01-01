@@ -639,7 +639,8 @@ collect_evaluation_data <- function(input, faculty, resident, field_names) {
     ass_date = format(Sys.Date(), "%Y-%m-%d"),
     ass_faculty = faculty$fac_name,
     ass_specialty = faculty$fac_div,
-    
+    ass_level = resident$Level,  # ADD RESIDENT LEVEL
+
     # Plus/Delta (user input)
     ass_plus = trimws(input$ass_plus),
     ass_delta = trimws(input$ass_delta)
@@ -1683,11 +1684,12 @@ collect_observation_data <- function(input, faculty, resident) {
     ass_date = format(Sys.Date(), "%Y-%m-%d"),
     ass_faculty = faculty$fac_name,
     ass_specialty = faculty$fac_div,
-    
+    ass_level = resident$Level,  # ADD RESIDENT LEVEL
+
     # Plus/Delta (user input) - Use observation-specific field names
     ass_plus = trimws(input$ass_obs_plus),
     ass_delta = trimws(input$ass_obs_delta),
-    
+
     # Observation type selection
     ass_obs_type = input$ass_obs_type
   )
