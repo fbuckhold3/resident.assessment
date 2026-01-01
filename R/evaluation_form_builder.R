@@ -632,14 +632,24 @@ collect_evaluation_data <- function(input, faculty, resident, field_names) {
   cat("  Resident Level:", resident$Level, "\n")
   cat("  Resident Type:", ifelse(is.null(resident$type), "NULL", resident$type), "\n")
   cat("  Field count:", length(field_names), "\n")
-  
+
+  # Map resident level to REDCap code
+  level_code <- switch(resident$Level,
+    "Intern" = "1",
+    "PGY2" = "2",
+    "PGY3" = "3",
+    "Rotator" = "1",  # Rotators use same code as Intern
+    NA  # Default if level doesn't match
+  )
+  cat("  Mapped level '", resident$Level, "' to code: ", level_code, "\n", sep = "")
+
   # Start with universal fields
   eval_data <- list(
     # Universal fields (auto-populated)
     ass_date = format(Sys.Date(), "%Y-%m-%d"),
     ass_faculty = faculty$fac_name,
     ass_specialty = faculty$fac_div,
-    ass_level = resident$Level,  # ADD RESIDENT LEVEL
+    ass_level = level_code,  # RESIDENT LEVEL (mapped to code)
 
     # Plus/Delta (user input)
     ass_plus = trimws(input$ass_plus),
@@ -1678,13 +1688,23 @@ validate_observation_form <- function(input) {
 }
 
 collect_observation_data <- function(input, faculty, resident) {
+  # Map resident level to REDCap code
+  level_code <- switch(resident$Level,
+    "Intern" = "1",
+    "PGY2" = "2",
+    "PGY3" = "3",
+    "Rotator" = "1",  # Rotators use same code as Intern
+    NA  # Default if level doesn't match
+  )
+  cat("Observation - Mapped level '", resident$Level, "' to code: ", level_code, "\n", sep = "")
+
   # Start with universal fields
   eval_data <- list(
     # Universal fields (auto-populated)
     ass_date = format(Sys.Date(), "%Y-%m-%d"),
     ass_faculty = faculty$fac_name,
     ass_specialty = faculty$fac_div,
-    ass_level = resident$Level,  # ADD RESIDENT LEVEL
+    ass_level = level_code,  # RESIDENT LEVEL (mapped to code)
 
     # Plus/Delta (user input) - Use observation-specific field names
     ass_plus = trimws(input$ass_obs_plus),
