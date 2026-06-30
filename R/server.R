@@ -503,20 +503,29 @@ server <- function(input, output, session) {
   # Handle evaluation type selection
   observeEvent(input$select_eval_type, {
     eval_type <- input$select_eval_type
-    
+
     if (!is.null(eval_type) && eval_type != "") {
+      # A/B randomization: the Senior/Intern Inpatient buttons each have a v2
+      # instrument. Draw a fresh 50/50 variant per evaluation. The drawn type
+      # becomes the active eval type, so the form/submit/headers all follow it
+      # (and v2 is named identically, keeping the user blind to which arm).
+      if (eval_type == "res_ip") {
+        eval_type <- sample(c("res_ip", "senior2"), 1)
+        cat("Senior Inpatient randomized to:", eval_type, "\n")
+      } else if (eval_type == "int_ip") {
+        eval_type <- sample(c("int_ip", "intern2"), 1)
+        cat("Intern Inpatient randomized to:", eval_type, "\n")
+      }
+
       values$selected_eval_type <- eval_type
-      
+
       if (exists("get_eval_type_display_info")) {
         eval_info <- get_eval_type_display_info(eval_type)
         if (!is.null(eval_info)) {
           cat("Selected evaluation type:", eval_info$name, "\n")
-          
-          # REMOVED: showNotification line
-          # showNotification(paste("Selected evaluation:", eval_info$name), type = "default")
         }
       }
-      
+
       values$current_step <- "evaluation_form"
     }
   })
@@ -579,6 +588,27 @@ server <- function(input, output, session) {
                                build_senior_inpatient_form()
                              } else {
                                build_form_error("Senior Inpatient form builder function not found.")
+                             }
+                           },
+                           "senior2" = {
+                             if (exists("build_senior2_form")) {
+                               build_senior2_form()
+                             } else {
+                               build_form_error("Senior Inpatient (v2) form builder function not found.")
+                             }
+                           },
+                           "intern2" = {
+                             if (exists("build_intern2_form")) {
+                               build_intern2_form()
+                             } else {
+                               build_form_error("Intern Inpatient (v2) form builder function not found.")
+                             }
+                           },
+                           "diamond" = {
+                             if (exists("build_diamond_form")) {
+                               build_diamond_form()
+                             } else {
+                               build_form_error("Diamond Team form builder function not found.")
                              }
                            },
                            "cc" = {
@@ -1698,7 +1728,33 @@ server <- function(input, output, session) {
       showNotification("Senior inpatient functions not found.", type = "error", duration = 5)
     }
   })
-  
+
+  # v2 inpatient instruments (reached only via randomization). Display name
+  # matches the original so the success/post-submit modal stays blind.
+  observeEvent(input$submit_senior2_evaluation, {
+    if (exists("validate_senior2_form") && exists("collect_senior2_data")) {
+      universal_submission_handler("senior2", "Senior Inpatient", validate_senior2_form, collect_senior2_data)
+    } else {
+      showNotification("Senior inpatient (v2) functions not found.", type = "error", duration = 5)
+    }
+  })
+
+  observeEvent(input$submit_intern2_evaluation, {
+    if (exists("validate_intern2_form") && exists("collect_intern2_data")) {
+      universal_submission_handler("intern2", "Intern Inpatient", validate_intern2_form, collect_intern2_data)
+    } else {
+      showNotification("Intern inpatient (v2) functions not found.", type = "error", duration = 5)
+    }
+  })
+
+  observeEvent(input$submit_diamond_evaluation, {
+    if (exists("validate_diamond_form") && exists("collect_diamond_data")) {
+      universal_submission_handler("diamond", "Diamond Team", validate_diamond_form, collect_diamond_data)
+    } else {
+      showNotification("Diamond Team functions not found.", type = "error", duration = 5)
+    }
+  })
+
   # ============================================================================
   # UNIVERSAL REFRESH BUTTONS AND CONTROLS
   # ============================================================================

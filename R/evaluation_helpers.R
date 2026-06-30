@@ -51,10 +51,35 @@ get_evaluation_types <- function() {
     ),
     day = list(
       id = "day",
-      name = "Single Day Clinic", 
+      name = "Single Day Clinic",
       icon = "📅",
       description = "Single day outpatient clinic evaluation",
       field_prefix = "ass_day"
+    ),
+    diamond = list(
+      id = "diamond",
+      name = "Diamond Team",
+      icon = "💎",
+      description = "Diamond team inpatient feedback",
+      field_prefix = "ass_diamond"
+    ),
+    # senior2 / intern2 are A/B variants reached by randomization from the
+    # Senior/Intern Inpatient buttons -- NOT shown as their own buttons (they
+    # are deliberately absent from every division list). Named identically to
+    # their originals so the form header doesn't reveal which arm was drawn.
+    senior2 = list(
+      id = "senior2",
+      name = "Senior Inpatient",
+      icon = "🏥",
+      description = "Inpatient ward evaluation for senior residents",
+      field_prefix = "ass_senior2"
+    ),
+    intern2 = list(
+      id = "intern2",
+      name = "Intern Inpatient",
+      icon = "🏨",
+      description = "Inpatient ward evaluation for interns",
+      field_prefix = "ass_intern2"
     )
   )
 }
@@ -117,7 +142,7 @@ get_available_eval_types_by_division <- function(fac_div) {
     "4" = c("cons", "day", "obs"),  # Endocrinology
     "5" = c("res_ip", "cons", "day", "obs"),  # Gastroenterology
     "6" = c("cons", "day", "obs"),  # Geriatrics
-    "7" = c("int_ip", "res_ip", "bridge", "day", "obs"),  # GIM - Hospitalist
+    "7" = c("int_ip", "res_ip", "diamond", "bridge", "day", "obs"),  # GIM - Hospitalist
     "8" = c("cc", "int_ip", "res_ip", "bridge", "day", "obs"),  # GIM - Primary Care
     "9" = c("cons", "day", "obs"),  # Hematology / Oncology
     "10" = c("cons", "day", "obs"), # Infectious Disease
@@ -154,18 +179,26 @@ filter_eval_types_by_resident_level <- function(eval_types, resident_level) {
     # Remove "res_ip" (senior inpatient) for interns
     filtered_types <- filtered_types[filtered_types != "res_ip"]
     cat("Removed 'res_ip' (senior inpatient) for intern\n")
-    
+
+    # Diamond Team is senior-only
+    filtered_types <- filtered_types[filtered_types != "diamond"]
+    cat("Removed 'diamond' (senior-only) for intern\n")
+
   } else if (resident_level %in% c("PGY2", "PGY3")) {
     # Senior residents (PGY2/PGY3) CANNOT do intern-specific evaluations
     # Remove "int_ip" (intern inpatient) for senior residents
     filtered_types <- filtered_types[filtered_types != "int_ip"]
     cat("Removed 'int_ip' (intern inpatient) for senior resident\n")
-    
+
   } else if (resident_level == "Rotator") {
     # Rotators can do most evaluations except continuity clinic
     filtered_types <- filtered_types[filtered_types != "cc"]
     cat("Removed 'cc' (continuity clinic) for rotator\n")
-    
+
+    # Diamond Team is senior-only; rotators may be intern-level, so exclude it
+    filtered_types <- filtered_types[filtered_types != "diamond"]
+    cat("Removed 'diamond' (senior-only) for rotator\n")
+
     # Rotators can do both intern and senior inpatient evaluations
     # (they might be at different levels from different programs)
     cat("Rotators can do both int_ip and res_ip evaluations\n")
@@ -206,6 +239,8 @@ get_eval_type_display_info <- function(eval_type_id, resident_level = NULL) {
     if (!is.null(resident_level) && resident_level == "Rotator") {
       tags <- c(tags, "Not Available for Rotators")
     }
+  } else if (eval_type_id == "diamond") {
+    tags <- c(tags, "Senior Level")
   }
   
   eval_info$tags <- tags

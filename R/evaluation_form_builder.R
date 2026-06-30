@@ -378,6 +378,73 @@ build_senior_inpatient_form <- function() {
 }
 
 # ============================================================================
+# NEW INPATIENT ASSESSMENTS (Diamond Team, Senior v2, Intern v2)
+# ============================================================================
+
+# Shared builder: pulls the given assessment fields from the dictionary in the
+# specified order and renders a progressive-disclosure form. Field choice text
+# comes straight from the REDCap dictionary (build_field_from_dict).
+build_dict_assessment_form <- function(field_order, form_title, submit_button_id) {
+  fields <- rdm_dict %>%
+    filter(form_name == "assessment") %>%
+    filter(field_name %in% field_order)
+
+  if (nrow(fields) == 0) {
+    return(div(
+      class = "text-center",
+      style = "padding: 2rem;",
+      h5("Configuration Error", style = "color: #dc3545;"),
+      p(paste("No fields found in data dictionary for", form_title, "."))
+    ))
+  }
+
+  # Preserve the intended (clinically sensible) order rather than alphabetical
+  fields <- fields[match(field_order, fields$field_name), ]
+  fields <- fields[!is.na(fields$field_name), ]
+
+  cat("Building", form_title, "with", nrow(fields), "fields\n")
+
+  assessment_fields <- lapply(1:nrow(fields), function(i) {
+    field_row <- fields[i, ]
+    cat("Building field", i, ":", field_row$field_name, "\n")
+    build_field_from_dict(field_row, required = TRUE)
+  })
+
+  build_progressive_disclosure_form(
+    form_title = form_title,
+    assessment_fields = assessment_fields,
+    submit_button_id = submit_button_id
+  )
+}
+
+build_diamond_form <- function() {
+  build_dict_assessment_form(
+    field_order = c("ass_diamond_doc", "ass_diamond_apps", "ass_diamond_comm",
+                    "ass_diamond_throughput", "ass_diamond_sdh"),
+    form_title = "Diamond Team Assessment",
+    submit_button_id = "submit_diamond_evaluation"
+  )
+}
+
+build_senior2_form <- function() {
+  build_dict_assessment_form(
+    field_order = c("ass_senior2_task", "ass_senior2_path", "ass_senior2_comm",
+                    "ass_senior2_teach", "ass_senior2_sdh"),
+    form_title = "Senior Inpatient Assessment",  # blind: same title as original
+    submit_button_id = "submit_senior2_evaluation"
+  )
+}
+
+build_intern2_form <- function() {
+  build_dict_assessment_form(
+    field_order = c("ass_intern2_doc", "ass_intern2_path", "ass_intern2_comm",
+                    "ass_intern2_teach", "ass_intern2_sdh"),
+    form_title = "Intern Inpatient Assessment",  # blind: same title as original
+    submit_button_id = "submit_intern2_evaluation"
+  )
+}
+
+# ============================================================================
 # GENERIC PROGRESSIVE DISCLOSURE FORM BUILDER
 # ============================================================================
 
@@ -616,9 +683,27 @@ validate_intern_inpatient_form <- function(input) {
 }
 
 validate_senior_inpatient_form <- function(input) {
-  field_names <- c("ass_res_ip_pc4_r2", "ass_res_ip_ics2_r1", "ass_res_ip_mk1", 
+  field_names <- c("ass_res_ip_pc4_r2", "ass_res_ip_ics2_r1", "ass_res_ip_mk1",
                    "ass_res_ip_sbp3_r1", "ass_res_ip_pc4_r1", "ass_res_ip_sbp3_r2")
   return(validate_evaluation_form(input, "res_ip", field_names))
+}
+
+validate_diamond_form <- function(input) {
+  field_names <- c("ass_diamond_doc", "ass_diamond_apps", "ass_diamond_comm",
+                   "ass_diamond_throughput", "ass_diamond_sdh")
+  return(validate_evaluation_form(input, "diamond", field_names))
+}
+
+validate_senior2_form <- function(input) {
+  field_names <- c("ass_senior2_task", "ass_senior2_path", "ass_senior2_comm",
+                   "ass_senior2_teach", "ass_senior2_sdh")
+  return(validate_evaluation_form(input, "senior2", field_names))
+}
+
+validate_intern2_form <- function(input) {
+  field_names <- c("ass_intern2_doc", "ass_intern2_path", "ass_intern2_comm",
+                   "ass_intern2_teach", "ass_intern2_sdh")
+  return(validate_evaluation_form(input, "intern2", field_names))
 }
 
 # ============================================================================
@@ -804,8 +889,26 @@ collect_intern_inpatient_data <- function(input, faculty, resident) {
 }
 
 collect_senior_inpatient_data <- function(input, faculty, resident) {
-  field_names <- c("ass_res_ip_pc4_r2", "ass_res_ip_ics2_r1", "ass_res_ip_mk1", 
+  field_names <- c("ass_res_ip_pc4_r2", "ass_res_ip_ics2_r1", "ass_res_ip_mk1",
                    "ass_res_ip_sbp3_r1", "ass_res_ip_pc4_r1", "ass_res_ip_sbp3_r2")
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_diamond_data <- function(input, faculty, resident) {
+  field_names <- c("ass_diamond_doc", "ass_diamond_apps", "ass_diamond_comm",
+                   "ass_diamond_throughput", "ass_diamond_sdh")
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_senior2_data <- function(input, faculty, resident) {
+  field_names <- c("ass_senior2_task", "ass_senior2_path", "ass_senior2_comm",
+                   "ass_senior2_teach", "ass_senior2_sdh")
+  return(collect_evaluation_data(input, faculty, resident, field_names))
+}
+
+collect_intern2_data <- function(input, faculty, resident) {
+  field_names <- c("ass_intern2_doc", "ass_intern2_path", "ass_intern2_comm",
+                   "ass_intern2_teach", "ass_intern2_sdh")
   return(collect_evaluation_data(input, faculty, resident, field_names))
 }
 
