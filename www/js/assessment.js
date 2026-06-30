@@ -238,6 +238,26 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
+// ============================================================================
+// DISABLE AUTOCORRECT / AUTOCAPITALIZE ON NAME INPUTS
+// Mobile keyboards otherwise "correct" surnames (e.g. Buckhold) and add stray
+// letters. These inputs are static in the DOM so a one-time pass is enough.
+// ============================================================================
+function disableAutocorrectOnNameInputs() {
+  ['faculty_search', 'resident_search', 'fac_name'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.setAttribute('autocomplete', 'off');
+      el.setAttribute('autocorrect', 'off');
+      el.setAttribute('autocapitalize', 'words');  // allow first-letter caps, no word-replace
+      el.setAttribute('spellcheck', 'false');
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(disableAutocorrectOnNameInputs, 500);
+});
+
 // Console logging for debugging (can be removed in production)
 console.log('Faculty Evaluation App JavaScript loaded successfully');
 console.log('Speech recognition supported:', speechRecognitionSupported());

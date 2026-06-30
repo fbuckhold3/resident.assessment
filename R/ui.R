@@ -1,7 +1,20 @@
 # ui.R - Faculty Evaluation App (Updated with Intro Page)
 
 ui <- page_fluid(
-  theme = bs_theme(bootswatch = "flatly", version = 5),  # Bootstrap 5 for modal support
+  # Bootstrap 5 (flatly) with SSM / SLUCare brand colors applied so Bootstrap
+  # components (buttons, modals) match the SSM palette already used in the
+  # custom CSS. Values mirror gmed::ssm_colors() / create_gmed_theme() — kept
+  # local rather than importing gmed so this app stays standalone.
+  theme = bs_theme(
+    bootswatch = "flatly",
+    version    = 5,
+    primary    = "#0066a1",  # SSM secondary blue (used as primary, per gmed)
+    secondary  = "#4a90a4",  # SSM light blue
+    success    = "#00a651",  # SSM success green
+    warning    = "#ff8c00",  # SSM warning orange
+    danger     = "#dc3545",  # SSM error red
+    info       = "#2196f3"   # SSM accent blue
+  ),
   
   # External CSS and JavaScript files
   tags$head(
