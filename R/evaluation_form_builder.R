@@ -591,7 +591,9 @@ validate_evaluation_form <- function(input, eval_type, field_names) {
 
 # Specific validation functions for each evaluation type
 validate_single_day_clinic_form <- function(input) {
-  field_names <- c("ass_cons_prof")  # Add day-specific fields when they exist
+  # Must match the fields built in build_single_day_clinic_form():
+  # the three "day" milestone radios plus professionalism.
+  field_names <- c("ass_day_pc1_r1", "ass_day_pc3_r1", "ass_day_pc5_r3", "ass_cons_prof")
   return(validate_evaluation_form(input, "day", field_names))
 }
 
@@ -737,35 +739,6 @@ collect_observation_data <- function(input, faculty, resident) {
 }
 
 # Update all other collect functions to use the main function too
-collect_single_day_clinic_data <- function(input, faculty, resident) {
-  field_names <- c("ass_cons_prof")  # Add day-specific fields when they exist
-  return(collect_evaluation_data(input, faculty, resident, field_names))
-}
-
-collect_consultation_data <- function(input, faculty, resident) {
-  field_names <- c("ass_cons_prof", "ass_cons_careplan_pc3_r1", 
-                   "ass_cons_testing_mk3", "ass_cons_comm_ics2_r1", "ass_cons_sdh_sbp2_r2")
-  return(collect_evaluation_data(input, faculty, resident, field_names))
-}
-
-collect_bridge_clinic_data <- function(input, faculty, resident) {
-  field_names <- c("ass_bridge_sbp2_r2", "ass_bridge_pc5_r3", "ass_bridge_sbp3_r2")
-  return(collect_evaluation_data(input, faculty, resident, field_names))
-}
-
-collect_intern_inpatient_data <- function(input, faculty, resident) {
-  field_names <- c("ass_int_ip_pc4_r1", "ass_int_ip_pc4_r2", "ass_int_ip_pc1_r1", 
-                   "ass_int_ip_pc3_r1", "ass_int_ip_mk1", "ass_int_ip_sbp2_r1", 
-                   "ass_int_ip_ics3_r2", "ass_int_ip_pbl2_r2", "ass_int_ip_beside")
-  return(collect_evaluation_data(input, faculty, resident, field_names))
-}
-
-collect_senior_inpatient_data <- function(input, faculty, resident) {
-  field_names <- c("ass_res_ip_pc4_r2", "ass_res_ip_ics2_r1", "ass_res_ip_mk1", 
-                   "ass_res_ip_sbp3_r1", "ass_res_ip_pc4_r1", "ass_res_ip_sbp3_r2")
-  return(collect_evaluation_data(input, faculty, resident, field_names))
-}
-
 collect_continuity_clinic_data <- function(input, faculty, resident) {
   # Get field names for this quarter and level
   field_names <- get_cc_fields_for_quarter_and_level(input$ass_cc_quart, resident$Level)
@@ -806,7 +779,9 @@ collect_observation_data <- function(input, faculty, resident) {
 
 # Update all other collect functions to use the main function too
 collect_single_day_clinic_data <- function(input, faculty, resident) {
-  field_names <- c("ass_cons_prof")  # Add day-specific fields when they exist
+  # Must match build_single_day_clinic_form() and validate_single_day_clinic_form():
+  # the three "day" milestone radios plus professionalism.
+  field_names <- c("ass_day_pc1_r1", "ass_day_pc3_r1", "ass_day_pc5_r3", "ass_cons_prof")
   return(collect_evaluation_data(input, faculty, resident, field_names))
 }
 
