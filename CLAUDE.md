@@ -66,9 +66,17 @@ the #1 source of silent data loss in this app.
 
 ## Current status
 
-On branch `claude/assessment-ui-updates` (not pushed — pushing triggers a
-Connect deploy, which is Fred's call). Includes: SSM brand colors on
-`bs_theme` in `ui.R`, faculty identity-confirmation modal, post-submit
-routing choice modal, a "show all types" escape hatch bypassing
-division/level filtering, and the Single Day Clinic milestone-save fix
-above. Verify current branch/log before assuming this is still accurate.
+Merged to `main` and pushed 2026-08-16 (was branch
+`claude/assessment-ui-updates`) — deployed to Connect. Includes: faculty
+identity-confirmation modal, post-submit routing choice modal, a "show
+all types" escape hatch bypassing division/level filtering, the Single
+Day Clinic milestone-save fix above, and a full recolor from the old SSM
+brand palette onto `roundsui` ("Ward Notes") tokens (`ui.R` now calls
+`roundsui::create_roundsui_theme()`/`load_roundsui_styles()`;
+`manifest.json` regenerated accordingly so Connect installs the
+dependency). Known pre-existing, unfixed: the intro screen's markup uses
+`intro-page-mobile`/`intro-card-mobile`/etc. classes that are never
+defined in `assessment.css` (only the non-`-mobile` variants exist), so
+it renders unstyled; `assessment.js:64` calls `addRealTimeValidation`,
+which is never defined anywhere in the file. Verify current branch/log
+before assuming this is still accurate.
