@@ -128,8 +128,8 @@ function startSpeechRecognition(textareaId) {
   if (speechBtn) {
     speechBtn.innerHTML = '🔴';
     speechBtn.title = 'Recording... Click to stop';
-    speechBtn.style.background = '#ffebee';
-    speechBtn.style.borderColor = '#f44336';
+    speechBtn.style.background = 'var(--roundsui-danger-tint)';
+    speechBtn.style.borderColor = 'var(--roundsui-danger)';
   }
   
   // Store original text to preserve existing content
