@@ -42,16 +42,6 @@ body {
   overflow: hidden;
 }
 
-.ssm-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: var(--roundsui-accent);
-}
-
 .step-header {
   background: var(--roundsui-accent);
   color: var(--roundsui-surface);
@@ -90,16 +80,6 @@ body {
   width: 100%;
   overflow: hidden;
   position: relative;
-}
-
-.intro-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 6px;
-  background: var(--roundsui-accent);
 }
 
 .intro-header {
