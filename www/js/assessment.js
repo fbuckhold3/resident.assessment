@@ -128,8 +128,8 @@ function startSpeechRecognition(textareaId) {
   if (speechBtn) {
     speechBtn.innerHTML = '🔴';
     speechBtn.title = 'Recording... Click to stop';
-    speechBtn.style.background = '#ffebee';
-    speechBtn.style.borderColor = '#f44336';
+    speechBtn.style.background = 'var(--roundsui-danger-tint)';
+    speechBtn.style.borderColor = 'var(--roundsui-danger)';
   }
   
   // Store original text to preserve existing content
@@ -236,6 +236,26 @@ document.addEventListener('DOMContentLoaded', function() {
   } else {
     console.log('Speech recognition supported');
   }
+});
+
+// ============================================================================
+// DISABLE AUTOCORRECT / AUTOCAPITALIZE ON NAME INPUTS
+// Mobile keyboards otherwise "correct" surnames (e.g. Buckhold) and add stray
+// letters. These inputs are static in the DOM so a one-time pass is enough.
+// ============================================================================
+function disableAutocorrectOnNameInputs() {
+  ['faculty_search', 'resident_search', 'fac_name'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.setAttribute('autocomplete', 'off');
+      el.setAttribute('autocorrect', 'off');
+      el.setAttribute('autocapitalize', 'words');  // allow first-letter caps, no word-replace
+      el.setAttribute('spellcheck', 'false');
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(disableAutocorrectOnNameInputs, 500);
 });
 
 // Console logging for debugging (can be removed in production)

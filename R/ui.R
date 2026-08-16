@@ -1,10 +1,21 @@
 # ui.R - Faculty Evaluation App (Updated with Intro Page)
 
 ui <- page_fluid(
-  theme = bs_theme(bootswatch = "flatly", version = 5),  # Bootstrap 5 for modal support
-  
+  # Ward Notes (roundsui) theme. create_roundsui_theme() sets bslib's own
+  # primary/success/warning/danger/bg/fg slots from roundsui tokens, so
+  # Bootstrap's own component classes (.btn-primary, .text-success, form
+  # validation states, etc.) pick up Ward Notes colors automatically -
+  # this app leans on those more than the other apps recolored so far.
+  # roundsui has zero REDCap coupling by design, so adding it doesn't
+  # compromise this app's deliberate "no gmed" standalone architecture
+  # (see this repo's CLAUDE.md) - it's a pure UI/theming package.
+  theme = roundsui::create_roundsui_theme(base_font = "Inter", heading_font = "Inter"),
+
   # External CSS and JavaScript files
   tags$head(
+    # roundsui's own CSS - assessment.css (recolored onto --roundsui-*
+    # tokens) needs this loaded first.
+    roundsui::load_roundsui_styles(),
     tags$link(rel = "stylesheet", type = "text/css", href = "css/assessment.css"),
     tags$script(src = "js/assessment.js")
   ),
@@ -84,7 +95,7 @@ ui <- page_fluid(
             div(class = "text-center mt-4",
                 div(class = "add-faculty-prompt",
                     p("Can't find your name?", 
-                      style = "margin-bottom: 0.5rem; color: var(--ssm-text-secondary); font-size: 0.95rem;"),
+                      style = "margin-bottom: 0.5rem; color: var(--roundsui-ink-faint); font-size: 0.95rem;"),
                     actionButton("show_add_faculty_modal", 
                                  "Add Yourself to Database", 
                                  class = "btn btn-outline-primary add-faculty-btn",

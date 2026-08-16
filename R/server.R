@@ -5,6 +5,7 @@ server <- function(input, output, session) {
   # Reactive values to track app state
   values <- reactiveValues(
     selected_faculty = NULL,
+    pending_faculty = NULL,   # faculty clicked but not yet identity-confirmed
     selected_resident = NULL,
     selected_eval_type = NULL,
     current_search_results = NULL,
@@ -108,22 +109,64 @@ server <- function(input, output, session) {
           
           observeEvent(input[[button_id]], {
             if (!is.null(faculty_results) && faculty_index <= nrow(faculty_results)) {
-              values$selected_faculty <- faculty_results[faculty_index, ]
-              
-              name_field <- get_field_name(values$selected_faculty, c("fac_name", "name", "faculty_name"))
-              cat("Selected faculty:", values$selected_faculty[[name_field]], "\n")
-              
-              values$current_step <- "resident"
-              
-              # REMOVED: showNotification line
-              # showNotification(paste("Selected:", values$selected_faculty[[name_field]]), type = "default")
+              # Stage the faculty and ask them to confirm their identity before
+              # proceeding — guards against selecting the wrong name.
+              values$pending_faculty <- faculty_results[faculty_index, ]
+
+              fac <- values$pending_faculty
+              name_field <- get_field_name(fac, c("fac_name", "name", "faculty_name"))
+              dept_field <- get_field_name(fac, c("fac_div", "department", "division"))
+              role_field <- get_field_name(fac, c("fac_fell", "role", "position"))
+              cat("Pending faculty selection:", fac[[name_field]], "\n")
+
+              detail_bits <- c(
+                if (!is.null(dept_field) && !is.na(fac[[dept_field]])) paste0(fac[[dept_field]]),
+                if (!is.null(role_field) && !is.na(fac[[role_field]])) paste0("(", fac[[role_field]], ")")
+              )
+
+              showModal(modalDialog(
+                title = "Please confirm it's you",
+                div(
+                  p("You're about to sign assessments as:"),
+                  div(class = "faculty-confirm-name",
+                      strong(fac[[name_field]]),
+                      if (length(detail_bits) > 0) tags$div(class = "text-muted",
+                        paste(detail_bits, collapse = " "))
+                  ),
+                  p(class = "mt-3 mb-0", "Is this you?")
+                ),
+                footer = tagList(
+                  actionButton("cancel_faculty_confirm", "No, go back", class = "btn btn-outline-secondary"),
+                  actionButton("confirm_faculty_identity", "Yes, that's me", class = "btn btn-primary")
+                ),
+                easyClose = FALSE
+              ))
             }
           })
         })
       }
     }
   })
-  
+
+  # Faculty identity confirmation handlers
+  observeEvent(input$confirm_faculty_identity, {
+    req(values$pending_faculty)
+    values$selected_faculty <- values$pending_faculty
+    values$pending_faculty <- NULL
+
+    name_field <- get_field_name(values$selected_faculty, c("fac_name", "name", "faculty_name"))
+    cat("Confirmed faculty:", values$selected_faculty[[name_field]], "\n")
+
+    removeModal()
+    values$current_step <- "resident"
+  })
+
+  observeEvent(input$cancel_faculty_confirm, {
+    values$pending_faculty <- NULL
+    removeModal()
+    # Stay on faculty search so they can pick the correct name
+  })
+
   output$faculty_search_results <- renderUI({
     faculty_results <- filtered_faculty()
     
@@ -416,15 +459,36 @@ server <- function(input, output, session) {
         values$selected_faculty$name %||% 
         "Selected Faculty"
       
+      # Small-print escape hatch: let faculty pick ANY assessment type, not just
+      # the ones auto-suggested for their division / the resident's level.
+      all_types <- get_evaluation_types()
+      all_type_links <- lapply(all_types, function(t) {
+        tags$button(
+          type = "button",
+          class = "btn btn-link btn-sm all-types-link",
+          onclick = paste0("Shiny.setInputValue('select_eval_type', '", t$id,
+                           "', {priority: 'event'});"),
+          paste0(t$icon, " ", t$name)
+        )
+      })
+
       tagList(
         div(class = "eval-selection-info",
             h5("Available Evaluations"),
-            p(paste("Based on", faculty_name, "'s specialty and", 
+            p(paste("Based on", faculty_name, "'s specialty and",
                     values$selected_resident$name, "'s level, the following evaluations are available:"))
         ),
-        div(class = "eval-type-container", button_list)
+        div(class = "eval-type-container", button_list),
+
+        div(class = "all-types-section text-center mt-4",
+            tags$details(
+              tags$summary(class = "all-types-summary",
+                           "Need a different assessment? Show all types"),
+              div(class = "all-types-list mt-2", all_type_links)
+            )
+        )
       )
-      
+
     }, error = function(e) {
       cat("Error in evaluation type selection:", e$message, "\n")
       return(div(
@@ -439,20 +503,29 @@ server <- function(input, output, session) {
   # Handle evaluation type selection
   observeEvent(input$select_eval_type, {
     eval_type <- input$select_eval_type
-    
+
     if (!is.null(eval_type) && eval_type != "") {
+      # A/B randomization: the Senior/Intern Inpatient buttons each have a v2
+      # instrument. Draw a fresh 50/50 variant per evaluation. The drawn type
+      # becomes the active eval type, so the form/submit/headers all follow it
+      # (and v2 is named identically, keeping the user blind to which arm).
+      if (eval_type == "res_ip") {
+        eval_type <- sample(c("res_ip", "senior2"), 1)
+        cat("Senior Inpatient randomized to:", eval_type, "\n")
+      } else if (eval_type == "int_ip") {
+        eval_type <- sample(c("int_ip", "intern2"), 1)
+        cat("Intern Inpatient randomized to:", eval_type, "\n")
+      }
+
       values$selected_eval_type <- eval_type
-      
+
       if (exists("get_eval_type_display_info")) {
         eval_info <- get_eval_type_display_info(eval_type)
         if (!is.null(eval_info)) {
           cat("Selected evaluation type:", eval_info$name, "\n")
-          
-          # REMOVED: showNotification line
-          # showNotification(paste("Selected evaluation:", eval_info$name), type = "default")
         }
       }
-      
+
       values$current_step <- "evaluation_form"
     }
   })
@@ -515,6 +588,27 @@ server <- function(input, output, session) {
                                build_senior_inpatient_form()
                              } else {
                                build_form_error("Senior Inpatient form builder function not found.")
+                             }
+                           },
+                           "senior2" = {
+                             if (exists("build_senior2_form")) {
+                               build_senior2_form()
+                             } else {
+                               build_form_error("Senior Inpatient (v2) form builder function not found.")
+                             }
+                           },
+                           "intern2" = {
+                             if (exists("build_intern2_form")) {
+                               build_intern2_form()
+                             } else {
+                               build_form_error("Intern Inpatient (v2) form builder function not found.")
+                             }
+                           },
+                           "diamond" = {
+                             if (exists("build_diamond_form")) {
+                               build_diamond_form()
+                             } else {
+                               build_form_error("Diamond Team form builder function not found.")
                              }
                            },
                            "cc" = {
@@ -768,16 +862,10 @@ server <- function(input, output, session) {
         type = "default",
         duration = 5
       )
-      
-      # Reset to start
-      values$selected_faculty <- NULL
-      values$selected_resident <- NULL
-      values$selected_eval_type <- NULL
-      values$current_step <- "faculty"
-      
-      updateTextInput(session, "faculty_search", value = "")
-      updateTextInput(session, "resident_search", value = "")
-      
+
+      # Offer next-step choice (keeps faculty selected, unlike the old reset)
+      show_post_submit_modal("Continuity Clinic")
+
     }, error = function(e) {
       cat("Error submitting continuity clinic evaluation:", e$message, "\n")
       showNotification(
@@ -1357,7 +1445,79 @@ server <- function(input, output, session) {
       cat("Smart refresh completed. Everything cleared.\n")
     }
   }
-  
+
+  # ============================================================================
+  # POST-SUBMISSION CHOICE
+  # ============================================================================
+
+  # Clear all dynamic assessment form fields (not faculty/resident search)
+  clear_assessment_form_fields <- function() {
+    for (field in get_all_form_field_names()) {
+      try({
+        updateTextInput(session, field, value = "")
+        updateTextAreaInput(session, field, value = "")
+        updateSelectInput(session, field, selected = "")
+        updateRadioButtons(session, field, selected = character(0))
+        updateCheckboxGroupInput(session, field, selected = character(0))
+        updateNumericInput(session, field, value = NA)
+      }, silent = TRUE)
+    }
+    session$sendCustomMessage("hideAllDynamicSections", list())
+  }
+
+  # Modal shown after a successful submission, offering what to do next.
+  show_post_submit_modal <- function(eval_type_name = "Assessment") {
+    resident_name <- if (!is.null(values$selected_resident)) values$selected_resident$name else "this resident"
+    faculty_name  <- if (!is.null(values$selected_faculty)) values$selected_faculty$fac_name else "you"
+
+    showModal(modalDialog(
+      title = paste0("✅ ", eval_type_name, " submitted"),
+      div(
+        p(paste0("Saved for ", resident_name, ".")),
+        p(class = "text-muted mb-0", paste0("Signed in as ", faculty_name, ". What next?"))
+      ),
+      footer = tagList(
+        actionButton("post_assess_same_resident", paste0("Assess ", resident_name, " again"),
+                     class = "btn btn-primary"),
+        actionButton("post_another_resident", "Evaluate another resident",
+                     class = "btn btn-outline-primary"),
+        actionButton("post_switch_faculty", "Switch faculty",
+                     class = "btn btn-outline-secondary")
+      ),
+      easyClose = FALSE
+    ))
+  }
+
+  # Same resident, new assessment: keep faculty + resident, return to type picker
+  observeEvent(input$post_assess_same_resident, {
+    clear_assessment_form_fields()
+    values$selected_eval_type <- NULL
+    values$cc_quarter_selection_info <- NULL
+    values$obs_type_selection_info <- NULL
+    removeModal()
+    values$current_step <- "evaluation_type"
+  })
+
+  # Another resident, same faculty: keep faculty, clear resident
+  observeEvent(input$post_another_resident, {
+    clear_assessment_form_fields()
+    values$selected_resident <- NULL
+    values$selected_eval_type <- NULL
+    values$current_resident_results <- NULL
+    values$cc_quarter_selection_info <- NULL
+    values$obs_type_selection_info <- NULL
+    updateTextInput(session, "resident_search", value = "")
+    removeModal()
+    values$current_step <- "resident"
+  })
+
+  # Switch faculty: clear everything, back to faculty login
+  observeEvent(input$post_switch_faculty, {
+    clear_assessment_form_fields()
+    removeModal()
+    universal_smart_refresh(preserve_faculty = FALSE, show_notification = FALSE)
+  })
+
   # Universal faculty data refresh
   universal_faculty_refresh <- function() {
     tryCatch({
@@ -1491,10 +1651,10 @@ server <- function(input, output, session) {
         type = "default",
         duration = 5
       )
-      
-      # Universal smart refresh (preserve faculty)
-      universal_smart_refresh(preserve_faculty = TRUE, show_notification = TRUE)
-      
+
+      # Offer next-step choice (assess again / another resident / switch faculty)
+      show_post_submit_modal(eval_type_name)
+
     }, error = function(e) {
       cat("Error submitting", eval_type, "evaluation:", e$message, "\n")
       showNotification(
@@ -1568,7 +1728,33 @@ server <- function(input, output, session) {
       showNotification("Senior inpatient functions not found.", type = "error", duration = 5)
     }
   })
-  
+
+  # v2 inpatient instruments (reached only via randomization). Display name
+  # matches the original so the success/post-submit modal stays blind.
+  observeEvent(input$submit_senior2_evaluation, {
+    if (exists("validate_senior2_form") && exists("collect_senior2_data")) {
+      universal_submission_handler("senior2", "Senior Inpatient", validate_senior2_form, collect_senior2_data)
+    } else {
+      showNotification("Senior inpatient (v2) functions not found.", type = "error", duration = 5)
+    }
+  })
+
+  observeEvent(input$submit_intern2_evaluation, {
+    if (exists("validate_intern2_form") && exists("collect_intern2_data")) {
+      universal_submission_handler("intern2", "Intern Inpatient", validate_intern2_form, collect_intern2_data)
+    } else {
+      showNotification("Intern inpatient (v2) functions not found.", type = "error", duration = 5)
+    }
+  })
+
+  observeEvent(input$submit_diamond_evaluation, {
+    if (exists("validate_diamond_form") && exists("collect_diamond_data")) {
+      universal_submission_handler("diamond", "Diamond Team", validate_diamond_form, collect_diamond_data)
+    } else {
+      showNotification("Diamond Team functions not found.", type = "error", duration = 5)
+    }
+  })
+
   # ============================================================================
   # UNIVERSAL REFRESH BUTTONS AND CONTROLS
   # ============================================================================
