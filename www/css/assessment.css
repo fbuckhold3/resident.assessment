@@ -143,9 +143,18 @@ body {
 }
 
 .intro-btn:hover {
-  transform: translateY(-2px);
   box-shadow: var(--roundsui-shadow);
   background: var(--roundsui-accent);
+}
+
+/* transform-on-hover is split out and gated to real pointers (mouse) below —
+   on touch devices :hover fires on tap-down, and shifting the element mid-tap
+   can make the browser drop the synthesized click (see resident.assessment
+   "confirm it's you" modal mobile bug, 2026-08-28). */
+@media (hover: hover) and (pointer: fine) {
+  .intro-btn:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .intro-note {
@@ -174,7 +183,12 @@ body {
 .search-result:hover {
   border-color: var(--roundsui-accent);
   box-shadow: var(--roundsui-shadow);
-  transform: translateX(4px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .search-result:hover {
+    transform: translateX(4px);
+  }
 }
 
 .search-result::before {
@@ -386,8 +400,13 @@ body {
 .add-faculty-prompt:hover {
   border-color: var(--roundsui-accent);
   background: var(--roundsui-surface);
-  transform: translateY(-2px);
   box-shadow: var(--roundsui-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .add-faculty-prompt:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .add-faculty-btn {
@@ -428,8 +447,13 @@ body {
 .eval-type-button:hover {
   border-color: var(--roundsui-accent);
   background: var(--roundsui-accent-tint);
-  transform: translateY(-4px);
   box-shadow: var(--roundsui-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .eval-type-button:hover {
+    transform: translateY(-4px);
+  }
 }
 
 .eval-type-button.disabled {
@@ -594,7 +618,12 @@ body {
 .speech-btn:hover {
   background: rgba(255, 255, 255, 1);
   border-color: var(--roundsui-accent);
-  transform: scale(1.05);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .speech-btn:hover {
+    transform: scale(1.05);
+  }
 }
 
 .speech-btn.recording {
@@ -729,8 +758,13 @@ body {
 }
 
 .completion-item:hover, .clickable-quarter:hover {
-  transform: translateY(-2px);
   box-shadow: var(--roundsui-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .completion-item:hover, .clickable-quarter:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .completion-item.completed, .clickable-quarter.completed {
@@ -785,8 +819,13 @@ body {
 .obs-type-button:hover {
   border-color: var(--roundsui-accent);
   background: var(--roundsui-accent-tint);
-  transform: translateY(-2px);
   box-shadow: var(--roundsui-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .obs-type-button:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .obs-type-button.disabled {
